@@ -19,7 +19,7 @@ git switch -c sync/upstream-<short-desc> main
 git merge upstream/development
 ```
 
-Resolve conflicts on the sync branch, run `pnpm install && pnpm run lint`, smoke-test the app, then merge the sync branch into `main`.
+Resolve conflicts on the sync branch, run `pnpm install`, then the gate (`pnpm run lint && pnpm run pack && pnpm run pack:web`), smoke-test the app, then merge the sync branch into `main`.
 
 - **Merge, don't rebase.** `main` is shared history; a merge keeps upstream's commits intact and makes the next sync's merge base obvious.
 - **When upstream fixes a bug this fork already fixed,** prefer upstream's version in the conflict and drop the fork's, unless the fork's fix is clearly better. Fewer divergent lines mean cheaper future syncs.
