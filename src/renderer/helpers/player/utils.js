@@ -691,3 +691,29 @@ export function stopPowerSaveBlocker() {
     window.ftElectron.stopPowerSaveBlocker()
   }
 }
+
+// Each automatic SABR reload requests a new PO token and new player data from YouTube. When YouTube keeps
+// refusing the tokens, more reloads don't help and the burst of requests can get the IP blocked (HTTP 403),
+// so only a couple are allowed per video within the window.
+const SABR_RELOAD_WINDOW_MS = 5 * 60_000
+const MAX_SABR_RELOADS_PER_WINDOW = 2
+
+/**
+ * Decides whether an automatic SABR reload may go ahead, and returns the updated reload state.
+ * The count resets for a different video or once the last reload is older than the window.
+ * @param {{ videoId: string, count: number, lastReloadAt: number } | null} state
+ * @param {string} videoId
+ * @param {number} now
+ * @returns {{ allowed: boolean, state: { videoId: string, count: number, lastReloadAt: number } }}
+ */
+export function registerSabrReload(state, videoId, now) {
+  if (state?.videoId !== videoId || now - state.lastReloadAt > SABR_RELOAD_WINDOW_MS) {
+    state = { videoId, count: 0, lastReloadAt: now }
+  }
+
+  if (state.count >= MAX_SABR_RELOADS_PER_WINDOW) {
+    return { allowed: false, state }
+  }
+
+  return { allowed: true, state: { videoId, count: state.count + 1, lastReloadAt: now } }
+}

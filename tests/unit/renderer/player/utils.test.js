@@ -21,6 +21,7 @@ const {
   manifestPreprocessorTXml,
   patchLiveHlsMainManifest,
   repairInvidiousManifest,
+  registerSabrReload,
   requestFilter,
   sortCaptions,
   translateSponsorBlockCategory,
@@ -346,5 +347,24 @@ describe('logShakaError', () => {
     expect(message).toContain(`Category: MEDIA (${Category.MEDIA})`)
     expect(message).toContain(`Code: MP4_SIDX_WRONG_BOX_TYPE (${Code.MP4_SIDX_WRONG_BOX_TYPE})`)
     expect(rest).toEqual(['\n\nshaka-player Data:', '["extra"]', '\n\nFreeTube data:', '{"a":1}'])
+  })
+})
+
+describe('registerSabrReload', () => {
+  it('allows two reloads of a video, then refuses', () => {
+    let result = registerSabrReload(null, 'abc', 0)
+    expect(result.allowed).toBe(true)
+    result = registerSabrReload(result.state, 'abc', 10_000)
+    expect(result.allowed).toBe(true)
+    result = registerSabrReload(result.state, 'abc', 20_000)
+    expect(result.allowed).toBe(false)
+    // Still refused while the attempts keep coming
+    expect(registerSabrReload(result.state, 'abc', 60_000).allowed).toBe(false)
+  })
+
+  it('starts over for another video or after five quiet minutes', () => {
+    const exhausted = { videoId: 'abc', count: 2, lastReloadAt: 0 }
+    expect(registerSabrReload(exhausted, 'xyz', 1000).allowed).toBe(true)
+    expect(registerSabrReload(exhausted, 'abc', 5 * 60_000 + 1).allowed).toBe(true)
   })
 })

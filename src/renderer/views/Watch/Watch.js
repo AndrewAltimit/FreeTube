@@ -41,13 +41,9 @@ import {
   mapInvidiousLegacyFormat,
   youtubeImageUrlToInvidious
 } from '../../helpers/api/invidious'
-import { sortCaptions } from '../../helpers/player/utils'
+import { registerSabrReload, sortCaptions } from '../../helpers/player/utils'
 import { MANIFEST_TYPE_SABR } from '../../helpers/player/SabrManifestParser'
 import { useI18n } from 'vue-i18n'
-
-// Automatic SABR reloads for one video closer together than this count as consecutive
-const SABR_RELOAD_WINDOW_MS = 60_000
-const MAX_CONSECUTIVE_SABR_RELOADS = 5
 
 /**
  * @typedef {{
@@ -1995,20 +1991,15 @@ export default defineComponent({
     }, 1000),
 
     async onSabrReloadRequested() {
-      // Each reload fetches a new PO token, which usually recovers playback. If YouTube keeps rejecting the
-      // tokens, stop after a few attempts instead of reloading the player forever.
-      const now = Date.now()
-      if (this.sabrReloadState?.videoId !== this.videoId || now - this.sabrReloadState.lastReloadAt > SABR_RELOAD_WINDOW_MS) {
-        this.sabrReloadState = { videoId: this.videoId, count: 0, lastReloadAt: now }
-      }
+      // Each reload fetches a new PO token, which sometimes recovers playback. If YouTube keeps rejecting
+      // the tokens, stop instead of reloading again (see registerSabrReload).
+      const { allowed, state } = registerSabrReload(this.sabrReloadState, this.videoId, Date.now())
+      this.sabrReloadState = state
 
-      if (this.sabrReloadState.count >= MAX_CONSECUTIVE_SABR_RELOADS) {
+      if (!allowed) {
         showToast(this.t('Video.Player.SABR reload limit reached'), 10000)
         return
       }
-
-      this.sabrReloadState.count++
-      this.sabrReloadState.lastReloadAt = now
 
       showToast(this.t('Video.Player.Reloading player at YouTube request'))
       await this.saveWatchProgressForReload()
