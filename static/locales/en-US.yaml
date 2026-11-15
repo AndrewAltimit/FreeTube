@@ -963,6 +963,8 @@ Video:
       shuffling playlists: shuffling playlists
       looping playlists: looping playlists
   Player:
+    Reloading player at YouTube request: Reloading player at YouTube's request
+    SABR reload limit reached: YouTube keeps refusing to stream this video. Try reloading it later.
     TranslatedCaptionTemplate: '{language} (translated from "{originalLanguage}")'
     Audio Tracks: Audio Tracks
     Autoplay is off: Autoplay is off

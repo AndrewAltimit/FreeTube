@@ -652,6 +652,18 @@ async function doRequest(
       fromCache: false,
       originalRequest: operationInputs.request,
     }
+  } else if (invalidPoToken) {
+    // Stream protection status 3 (attestation required): the server won't send media with this PO token,
+    // however long it is asked to back off. Reload right away to get a new token.
+    currentState.sabrStreamState.playerReloadRequested = true
+    if (!currentState.abortController.signal.aborted) {
+      currentState.abortController.abort()
+      currentState.eventEmitter.emit('reload')
+    }
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[SABR] PO token rejected (attestation required) for ${operationInputs.formatIdString} sq=${operationInputs.sequenceNumber}, requesting reload`)
+    }
+    throw createRecoverableNetworkError(ShakaError.Code.OPERATION_ABORTED, operationInputs.uri, operationInputs.requestType)
   } else if (shouldRetry) {
     if (shouldRetryDueToNextRequestPolicy) {
       // Only count on actual retry to avoid counting false positive (when segmentComplete
@@ -688,15 +700,6 @@ async function doRequest(
 
     currentState.abortStatus.finished = false
     return doRequest(operationInputs, currentState)
-  } else if (invalidPoToken) {
-    throw new ShakaError(
-      ShakaError.Severity.CRITICAL,
-      ShakaError.Category.NETWORK,
-      ShakaError.Code.HTTP_ERROR,
-      operationInputs.uri,
-      new Error('Invalid PO token'),
-      operationInputs.requestType,
-    )
   } else if (error) {
     throw createRecoverableNetworkError(
       ShakaError.Code.HTTP_ERROR,
