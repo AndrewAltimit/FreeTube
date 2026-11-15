@@ -233,20 +233,23 @@ describe('subscription-cache store module', () => {
       expect(DBSubscriptionCacheHandlers.deleteMultipleChannels).not.toHaveBeenCalled()
     })
 
-    // Documents a hazard rather than asserting a fix: App.vue runs this after
-    // grabAllProfiles even when loading profiles failed, in which case the main
-    // profile is the empty placeholder and every cached channel is deleted.
-    it('treats every cached channel as unsubscribed when the main profile has no subscriptions', async () => {
+    // Regression: App.vue runs this after grabAllProfiles even when loading profiles
+    // failed, in which case the main profile is the empty placeholder. Every cached
+    // channel looked unsubscribed and the whole subscription cache was deleted.
+    it('does not delete the cache when the main profile has no subscriptions', async () => {
       DBSubscriptionCacheHandlers.find.mockResolvedValue([
         { _id: 'UC1', videos: [video('v1')], videosTimestamp: new Date() },
+        { _id: 'UC2' },
       ])
 
       const store = buildStore([])
       await store.dispatch('grabAllSubscriptions')
       await flushPromises()
 
-      expect(DBSubscriptionCacheHandlers.deleteMultipleChannels).toHaveBeenCalledWith(['UC1'])
-      expect(store.getters.getVideoCache.UC1 ?? null).toBeNull()
+      expect(DBSubscriptionCacheHandlers.deleteMultipleChannels).not.toHaveBeenCalled()
+      // Nothing is subscribed, so nothing is loaded into memory either
+      expect(store.getters.getVideoCache).toEqual({})
+      expect(store.getters.getSubscriptionCacheReady).toBe(true)
     })
 
     it('replaces anything already in memory with the DB contents', async () => {
@@ -447,13 +450,11 @@ describe('subscription-cache store module', () => {
       })).not.toThrow()
     })
 
-    // BUG: subscription-cache.js `updateShortsCacheWithChannelPageShorts` reads
-    // `cachedObject.videos.length` without checking for null. An entry with
-    // `videos: null` exists after `updateShortsCacheByChannel` is committed with
-    // null entries for an uncached channel. The DB handler guards this case with
-    // Array.isArray; the mutation (also used directly by cross-window sync)
-    // throws a TypeError instead.
-    it.fails('does not throw when the cached shorts entry has no videos', () => {
+    // Regression: `updateShortsCacheWithChannelPageShorts` read `cachedObject.videos.length`
+    // without checking for null. An entry with `videos: null` exists after
+    // `updateShortsCacheByChannel` is committed with null entries for an uncached
+    // channel. The mutation (also used directly by cross-window sync) threw a TypeError.
+    it('does not throw when the cached shorts entry has no videos', () => {
       const store = buildStore()
       store.commit('updateShortsCacheByChannel', { channelId: 'UC1', entries: null })
 

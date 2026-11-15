@@ -129,10 +129,10 @@ describe('updateVideoListAfterProcessing', () => {
     expect(updateVideoListAfterProcessing(videos).map(v => v.videoId)).toEqual(['watched'])
   })
 
-  // BUG: parseYouTubeRSSFeed produces `viewCount` as a number (or null), but the
-  // premiere filter compares against the string '0' (subscriptions.js:23), so
-  // RSS premieres are never hidden.
-  it.fails('removes RSS videos with a numeric view count of 0 when hiding upcoming premieres', () => {
+  // Regression: parseYouTubeRSSFeed produces `viewCount` as a number (or null); the
+  // premiere filter used to compare only against the string '0', so RSS premieres
+  // were never hidden.
+  it('removes RSS videos with a numeric view count of 0 when hiding upcoming premieres', () => {
     getters.getHideUpcomingPremieres = true
 
     const videos = [
@@ -143,8 +143,8 @@ describe('updateVideoListAfterProcessing', () => {
     expect(updateVideoListAfterProcessing(videos).map(v => v.videoId)).toEqual(['watched'])
   })
 
-  // Same bug, end-to-end through the real RSS parser.
-  it.fails('removes RSS premieres produced by parseYouTubeRSSFeed', async () => {
+  // Same regression, end-to-end through the real RSS parser.
+  it('removes RSS premieres produced by parseYouTubeRSSFeed', async () => {
     getters.getHideUpcomingPremieres = true
 
     const { videos } = await parseYouTubeRSSFeed(buildFeed([
@@ -155,12 +155,11 @@ describe('updateVideoListAfterProcessing', () => {
     expect(updateVideoListAfterProcessing(videos).map(v => v.videoId)).toEqual(['normal00000'])
   })
 
-  // BUG: the non-RSS premiere check is `premiereDate == null || premiereTimestamp == null`
-  // (subscriptions.js:26-31). The Local API only sets `premiereDate` and Invidious
-  // only sets `premiereTimestamp`, so one side is always null and nothing is ever
-  // removed. It should be `&&` (compare FtListLazyWrapper.vue, which treats either
-  // field being set as "is a premiere").
-  it.fails('removes Local API premieres (premiereDate set) when hiding upcoming premieres', () => {
+  // Regression: the non-RSS premiere check used to be `premiereDate == null ||
+  // premiereTimestamp == null`. The Local API only sets `premiereDate` and Invidious
+  // only sets `premiereTimestamp`, so one side was always null and nothing was
+  // removed. Either field being set means "is a premiere" (as in FtListLazyWrapper.vue).
+  it('removes Local API premieres (premiereDate set) when hiding upcoming premieres', () => {
     getters.getHideUpcomingPremieres = true
 
     const videos = [
@@ -171,7 +170,7 @@ describe('updateVideoListAfterProcessing', () => {
     expect(updateVideoListAfterProcessing(videos).map(v => v.videoId)).toEqual(['normal'])
   })
 
-  it.fails('removes Invidious premieres (premiereTimestamp set) when hiding upcoming premieres', () => {
+  it('removes Invidious premieres (premiereTimestamp set) when hiding upcoming premieres', () => {
     getters.getHideUpcomingPremieres = true
 
     const videos = [

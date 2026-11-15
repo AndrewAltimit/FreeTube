@@ -247,7 +247,7 @@ const showResult = computed(() => {
           // viewCount is our only method of detecting premieres in RSS
           // data without sending an additional request.
           // If we ever get a better flag, use it here instead.
-          (props.data.isRSS && props.data.viewCount === '0'))) {
+          (props.data.isRSS && (props.data.viewCount === 0 || props.data.viewCount === '0')))) {
       // hide upcoming
       return false
     }

@@ -450,11 +450,10 @@ describe('playlists', () => {
     expect(await getPlaylist('favorites')).not.toBeNull()
   })
 
-  // BUG: Playlists.deleteMultiple (src/datastores/handlers/base.js:287-289) calls
-  // removeAsync without { multi: true }. NeDB's remove defaults to multi: false, so
-  // only the first matching playlist is deleted. The store's removePlaylists action
-  // drops all of them from state, so the rest come back after a restart.
-  it.fails('deleteMultiple removes every given unprotected playlist', async () => {
+  // Regression: Playlists.deleteMultiple called removeAsync without { multi: true }.
+  // NeDB's remove defaults to multi: false, so only the first matching playlist was
+  // deleted, while the store dropped all of them, and the rest came back after a restart.
+  it('deleteMultiple removes every given unprotected playlist', async () => {
     await handlers.playlists.create([
       { _id: 'pl2', playlistName: 'Two', videos: [] },
       { _id: 'pl3', playlistName: 'Three', videos: [] },
@@ -526,6 +525,24 @@ describe('subscriptionCache', () => {
 
     await handlers.subscriptionCache[method]('UC1', [{ id: 2 }, { id: 3 }], 200)
     expect(await getChannel('UC1')).toEqual({ _id: 'UC1', [field]: [{ id: 2 }, { id: 3 }], [timestampField]: 200 })
+  })
+
+  // Regression: the store mutations keep the cached list (and refresh the timestamp)
+  // when given null entries, but the handlers wrote null, so after a restart the
+  // channel's feed was empty. The DB now behaves like the store.
+  it.each([
+    ['updateVideosByChannelId', 'videos', 'videosTimestamp'],
+    ['updateLiveStreamsByChannelId', 'liveStreams', 'liveStreamsTimestamp'],
+    ['updateShortsByChannelId', 'shorts', 'shortsTimestamp'],
+    ['updateCommunityPostsByChannelId', 'communityPosts', 'communityPostsTimestamp'],
+  ])('%s keeps the cached %s and refreshes its timestamp when entries are null', async (method, field, timestampField) => {
+    await handlers.subscriptionCache[method]('UC1', [{ id: 1 }], 100)
+
+    await handlers.subscriptionCache[method]('UC1', null, 200)
+    expect(await getChannel('UC1')).toEqual({ _id: 'UC1', [field]: [{ id: 1 }], [timestampField]: 200 })
+
+    await handlers.subscriptionCache[method]('UC2', null, 300)
+    expect(await getChannel('UC2')).toEqual({ _id: 'UC2', [timestampField]: 300 })
   })
 
   it('per-channel updates of different feeds do not clobber each other', async () => {

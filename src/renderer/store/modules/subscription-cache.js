@@ -35,12 +35,15 @@ const actions = {
 
       const toBeRemovedChannelIds = []
       const subscribedChannelIdSet = rootGetters.getSubscribedChannelIdSet
+      // An empty subscription list is also what we see when the profiles failed to load
+      // (only the placeholder profile exists), so never wipe the whole cache based on it
+      const canPruneUnsubscribed = subscribedChannelIdSet.size > 0
 
       for (const dataEntry of payload) {
         const channelId = dataEntry._id
         if (!subscribedChannelIdSet.has(channelId)) {
           // Clean up cache data for unsubscribed channels
-          toBeRemovedChannelIds.push(channelId)
+          if (canPruneUnsubscribed) { toBeRemovedChannelIds.push(channelId) }
           // No need to load data for unsubscribed channels
           continue
         }
@@ -160,7 +163,7 @@ const mutations = {
   updateShortsCacheWithChannelPageShorts(state, { channelId, entries }) {
     const cachedObject = state.shortsCache[channelId]
 
-    if (cachedObject && cachedObject.videos.length > 0) {
+    if (cachedObject && cachedObject.videos?.length > 0) {
       cachedObject.videos.forEach(cachedVideo => {
         const channelVideo = entries.find(short => cachedVideo.videoId === short.videoId)
 

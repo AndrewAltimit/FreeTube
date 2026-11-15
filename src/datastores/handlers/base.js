@@ -285,7 +285,7 @@ class Playlists {
   }
 
   static deleteMultiple(ids) {
-    return db.playlists.removeAsync({ _id: { $in: ids }, protected: { $ne: true } })
+    return db.playlists.removeAsync({ _id: { $in: ids }, protected: { $ne: true } }, { multi: true })
   }
 
   static deleteAll() {
@@ -325,7 +325,8 @@ class SubscriptionCache {
   static updateVideosByChannelId(channelId, entries, timestamp) {
     return db.subscriptionCache.updateAsync(
       { _id: channelId },
-      { $set: { videos: entries, videosTimestamp: timestamp } },
+      // Like the store mutations, null entries keep the cached list and only refresh the timestamp
+      { $set: entries != null ? { videos: entries, videosTimestamp: timestamp } : { videosTimestamp: timestamp } },
       { upsert: true }
     )
   }
@@ -333,7 +334,8 @@ class SubscriptionCache {
   static updateLiveStreamsByChannelId(channelId, entries, timestamp) {
     return db.subscriptionCache.updateAsync(
       { _id: channelId },
-      { $set: { liveStreams: entries, liveStreamsTimestamp: timestamp } },
+      // Like the store mutations, null entries keep the cached list and only refresh the timestamp
+      { $set: entries != null ? { liveStreams: entries, liveStreamsTimestamp: timestamp } : { liveStreamsTimestamp: timestamp } },
       { upsert: true }
     )
   }
@@ -341,7 +343,8 @@ class SubscriptionCache {
   static updateShortsByChannelId(channelId, entries, timestamp) {
     return db.subscriptionCache.updateAsync(
       { _id: channelId },
-      { $set: { shorts: entries, shortsTimestamp: timestamp } },
+      // Like the store mutations, null entries keep the cached list and only refresh the timestamp
+      { $set: entries != null ? { shorts: entries, shortsTimestamp: timestamp } : { shortsTimestamp: timestamp } },
       { upsert: true }
     )
   }
@@ -385,7 +388,8 @@ class SubscriptionCache {
   static updateCommunityPostsByChannelId(channelId, entries, timestamp) {
     return db.subscriptionCache.updateAsync(
       { _id: channelId },
-      { $set: { communityPosts: entries, communityPostsTimestamp: timestamp } },
+      // Like the store mutations, null entries keep the cached list and only refresh the timestamp
+      { $set: entries != null ? { communityPosts: entries, communityPostsTimestamp: timestamp } : { communityPostsTimestamp: timestamp } },
       { upsert: true }
     )
   }
