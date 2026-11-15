@@ -128,12 +128,10 @@ describe('search-history store module', () => {
       expect(entryIds(store).sort()).toEqual(['a', 'b'])
     })
 
-    // BUG: search-history.js `overwriteSearchHistory` sorts by `timeWatched`
+    // Regression: `overwriteSearchHistory` used to sort by `timeWatched`
     // (copied from history.js), but search history entries have
-    // `lastUpdatedAt`. Every comparison is NaN, so the list is saved and shown
-    // in import order instead of newest first, contradicting the comment
-    // right above the sort.
-    it.fails('overwriteSearchHistory sorts entries newest first before saving', async () => {
+    // `lastUpdatedAt`, so the list was saved in import order.
+    it('overwriteSearchHistory sorts entries newest first before saving', async () => {
       const store = buildStore()
 
       await store.dispatch('overwriteSearchHistory', [entry('old', 1), entry('new', 3), entry('mid', 2)])

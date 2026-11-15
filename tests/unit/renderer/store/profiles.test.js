@@ -241,12 +241,11 @@ describe('profiles store module', () => {
       expect(ids(store.getters.getProfileList)).toEqual([MAIN_PROFILE_ID, 'pb'])
     })
 
-    // BUG: profiles.js `removeProfileFromList` does
-    // `state.profileList.splice(findIndex(...), 1)` without checking for -1,
-    // so an id that is not in the list removes the LAST profile instead.
-    // Reachable via the cross-window DELETE sync event for a profile this
+    // Regression: `removeProfileFromList` used to splice `findIndex(...)`
+    // without checking for -1, so an id that is not in the list removed the
+    // LAST profile instead. Reachable via the cross-window DELETE sync event for a profile this
     // window no longer has, or a double removal.
-    it.fails('removeProfileFromList ignores an id that is not in the list', () => {
+    it('removeProfileFromList ignores an id that is not in the list', () => {
       const store = buildStore({ profileList: [mainProfile(), profile('pa', 'Alpha'), profile('pb', 'Beta')] })
 
       store.commit('removeProfileFromList', 'missing')

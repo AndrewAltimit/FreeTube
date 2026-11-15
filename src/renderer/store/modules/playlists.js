@@ -409,7 +409,7 @@ const actions = {
       await dispatch('unsetLastViewedPlaylists', playlistIds)
 
       await DBPlaylistHandlers.deleteMultiple(playlistIds)
-      commit('removePlaylists', playlistIds)
+      playlistIds.forEach(playlistId => commit('removePlaylist', playlistId))
     } catch (errMessage) {
       console.error(errMessage)
     }

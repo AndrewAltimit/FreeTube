@@ -408,11 +408,10 @@ describe('playlists store module', () => {
       expect(DBPlaylistHandlers.deleteMultiple).toHaveBeenCalledWith(['a', 'c'])
     })
 
-    // BUG: playlists.js `removePlaylists` commits 'removePlaylists', but the
-    // module has no such mutation (only `removePlaylist`). Vuex ignores the
-    // unknown commit, so the playlists are deleted from the DB but stay in the
-    // store until the next reload. The action is currently unused in the app.
-    it.fails('removePlaylists also removes the playlists from the store', async () => {
+    // Regression: `removePlaylists` used to commit a non-existent
+    // 'removePlaylists' mutation, so the playlists were deleted from the DB
+    // but stayed in the store. The action is currently unused in the app.
+    it('removePlaylists also removes the playlists from the store', async () => {
       const { store } = buildStore({ list: [playlist('a'), playlist('b'), playlist('c')] })
 
       await store.dispatch('removePlaylists', ['a', 'c'])

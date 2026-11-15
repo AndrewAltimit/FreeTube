@@ -206,11 +206,10 @@ describe('utils store module', () => {
       })).toThrow('Settings.Player Settings.Screenshot.Error.Empty File Name')
     })
 
-    // BUG: utils.js `parseScreenshotCustomFileName` documents %t as "video
-    // position millisecond 3 digits", but builds it with
-    // `(playerTime % 1).toString().slice(2, 5)`, which is not padded: 12.5s
-    // gives '5' instead of '500' (and 12.05s gives '05').
-    it.fails('%t is always three digits of milliseconds', async () => {
+    // Regression: %t used to be built with
+    // `(playerTime % 1).toString().slice(2, 5)` and no padding, so 12.5s gave
+    // '5' instead of the documented 3-digit '500'.
+    it('%t is always three digits of milliseconds', async () => {
       const store = buildStore()
 
       const name = await store.dispatch('parseScreenshotCustomFileName', {
