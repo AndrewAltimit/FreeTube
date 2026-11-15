@@ -36,7 +36,7 @@ User-facing documentation (install, FAQ, usage) is upstream's at [docs.freetubea
 
 ```bash
 pnpm install                 # once per clone; also installs the lefthook pre-commit hook
-pnpm run dev                 # Electron app with hot reload
+pnpm run dev                 # Electron app with hot reload; uses %APPDATA%/FreeTube-dev, not the real profile
 pnpm run dev:web             # browser build (no Local API, no main process)
 pnpm run debug               # dev with --remote-debug (attach from VS Code)
 pnpm run lint                # ESLint + Stylelint; the gate before every commit
@@ -65,6 +65,7 @@ Upstream never had a test suite; this fork added one on Vitest ([`docs/testing.m
 - **`process.env.*` flags are compile-time constants**, replaced by webpack `DefinePlugin`, not runtime env vars. Setting one in your shell does nothing; dead branches are stripped from the bundle.
 - **Adding an IPC call takes four edits:** the channel in `src/constants.js`, the handler in `src/main/index.js`, the wrapper in `src/preload/interface.js`, and the call site through `window.ftElectron`. The renderer has no `ipcRenderer`.
 - **Subscription feeds are cached per profile in their own store** (`store/modules/subscription-cache.js`, persisted to its own DB), separate from the subscription list itself (`profiles`). Bugs in feed refresh usually sit in how `components/Subscriptions*.vue` decide between the cache and a remote load, not in the extractor.
+- **Dev runs use their own profile.** `src/main/devUserData.js` (the first import in `src/main/index.js`) points `userData` at `FreeTube-dev` beside the real `FreeTube` directory, overridable with `FREETUBE_DEV_USER_DATA`. Without it, dev mode would share an installed FreeTube's databases. Packaged builds of the fork use the normal `FreeTube` directory, the same as upstream.
 - **YouTube breakage is often upstream of this repo.** Extraction lives in `youtubei.js` and `googlevideo`; a fix may be a dependency bump, not a code change. Check those projects' issues before patching around them.
 
 ## Writing rules for committed docs
