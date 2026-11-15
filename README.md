@@ -15,9 +15,9 @@ Available for Windows (10 and later), Mac (macOS 13 and later) & Linux thanks to
 > - **No feature requests or support.**
 > - **Do not report this fork's bugs upstream.** The FreeTube team does not support this fork.
 >
-> The rest of this README is upstream's, adjusted where it conflicts with this fork. For official builds and support, use [upstream FreeTube](https://github.com/FreeTubeApp/FreeTube).
+> The rest of this README is upstream's, adjusted where it conflicts with this fork.
 
-<p align="center"><a href="https://github.com/FreeTubeApp/FreeTube/releases">Download upstream FreeTube</a></p>
+<p align="center"><a href="https://github.com/AndrewAltimit/FreeTube/releases">Download</a></p>
 <p align="center">
   <a href="https://hosted.weblate.org/engage/free-tube/">
     <img src="https://hosted.weblate.org/widgets/free-tube/-/svg-badge.svg" alt="Translation status" />
@@ -25,12 +25,8 @@ Available for Windows (10 and later), Mac (macOS 13 and later) & Linux thanks to
 </p>
 
 <hr>
-<p align="center"><a href="#screenshots">Screenshots</a> &bull; <a href="#how-does-it-work">How does it work?</a> &bull; <a href="#features">Features</a> &bull; <a href="#download-links">Download Links</a> &bull; <a href="#contributing">Contributing</a> &bull; <a href="#localization">Localization</a> &bull; <a href="#contact">Contact</a> &bull; <a href="#donate">Donate</a> &bull; <a href="#license">License</a></p>
-<p align="center"><a href="https://freetubeapp.io/">Website</a> &bull; <a href="https://docs.freetubeapp.io/">Documentation</a> &bull; <a href="https://docs.freetubeapp.io/faq/">FAQ</a> &bull; <a href="https://github.com/FreeTubeApp/FreeTube/discussions">Discussions</a></p>
+<p align="center"><a href="#screenshots">Screenshots</a> &bull; <a href="#how-does-it-work">How does it work?</a> &bull; <a href="#features">Features</a> &bull; <a href="#download-links">Download Links</a> &bull; <a href="#contributing">Contributing</a> &bull; <a href="#localization">Localization</a> &bull; <a href="#contact">Contact</a> &bull; <a href="#license">License</a></p>
 <hr>
-
-> [!NOTE] 
-> FreeTube is currently in Beta. While it should work well for most users, there are still bugs and missing features that need to be addressed.
 
 ## Screenshots
 | The main FreeTube window                                                                         |
@@ -99,27 +95,13 @@ RedirectTube, doesn’t automatically open YouTube links in FreeTube (although t
 > If you have issues with the extension working with FreeTube, please create an issue in this repository instead of the extension repository.
 
 ## Download Links
-### Official Downloads
 
 > [!CAUTION]
 > FreeTube is only supported on Windows 10 and later, macOS 13 and above, and various Linux distributions. Installing it on unsupported systems may result in unexpected issues.
 
-* [GitHub Releases](https://github.com/FreeTubeApp/FreeTube/releases)
+* [GitHub Releases](https://github.com/AndrewAltimit/FreeTube/releases)
 
-* [FreeTube Website](https://freetubeapp.io/#download)
-
-* Flatpak on Flathub: [Download](https://flathub.org/apps/details/io.freetubeapp.FreeTube) and [Source Code](https://github.com/flathub/io.freetubeapp.FreeTube)
-
-#### This fork's builds
-This fork has no CI or release builds yet. The upstream pipelines are disabled while CI is rebuilt on a self-hosted runner (see [`.github/workflows-disabled/`](.github/workflows-disabled/README.md)). Until then, build from source with `pnpm install && pnpm run build`.
-
-### Projects maintained by individual FreeTube team members
-* Homebrew FreeTube (Apple Silicon only): [Install](https://github.com/PikachuEXE/homebrew-FreeTube)
-
-* FreeTubeAndroid (FreeTube port for Android and PWA): [Download](https://github.com/MarmadileManteater/FreeTubeAndroid/releases) and [Source Code](https://github.com/MarmadileManteater/FreeTubeAndroid)
-
-> [!IMPORTANT]
-> These projects are related to FreeTube and are maintained by individual members of the FreeTube team. While they are not part of the main FreeTube project, they may be useful to FreeTube users. There may be issues when using these projects compared to the official builds. Any issues specific to these builds should be reported to their respective maintainers. Make sure you always try an [official download](https://github.com/freetubeapp/freetube/#official-downloads) before reporting your issue to us!
+There are no release builds yet; they will appear on the releases page once CI is rebuilt on a self-hosted runner. Until then, build from source with `pnpm install && pnpm run build`.
 
 ## Contributing
 This fork does not accept external contributions; see [CONTRIBUTING.md](CONTRIBUTING.md). Development happens on `main`, with feature branches off it.
@@ -135,25 +117,8 @@ Translations come from upstream FreeTube's Weblate project and are pulled in whe
 
 We are actively looking for translations!  We use [Weblate](https://hosted.weblate.org/engage/free-tube/) to make it easy for translators to get involved.  Click on the badge above to learn how to get involved.
 
-For the Linux Flatpak, the desktop entry comment string can be translated at our [Flatpak repository](https://github.com/flathub/io.freetubeapp.FreeTube/blob/master/io.freetubeapp.FreeTube.desktop).
-
 ## Contact
-This fork offers no support channel. The contact and donation details below belong to upstream FreeTube and are for upstream only.
-
-If you ever have any questions about upstream FreeTube, feel free to ask it on their [Discussions](https://github.com/FreeTubeApp/FreeTube/discussions) page.  Alternatively, you can join our [Matrix Space](https://matrix.to/#/#freetubeapp:matrix.org).  
-
-> [!IMPORTANT]
-> Don't forget to check out the [rules](https://docs.freetubeapp.io/community/matrix/) before joining.
-
-## Donate
-If you enjoy using FreeTube, you're welcome to leave a donation using the following method.  
-
-* Bitcoin Address: `1Lih7Ho5gnxb1CwPD4o59ss78pwo2T91eS`
-
-While your donations are much appreciated, only donate if you really want to.  Donations are used for keeping the website up and running and eventual code signing costs. 
-
-> [!TIP]
-> If you are using the Invidious API then we recommend that you donate to the instance that you use. You can also donate to the [Invidious team](https://invidious.io/donate/) or the [Local API developer](https://github.com/sponsors/LuanRT).
+This fork offers no support channel.
 
 ## License
 [![GNU AGPLv3 Image](https://www.gnu.org/graphics/agplv3-155x51.png)](https://www.gnu.org/licenses/agpl-3.0.html)  
