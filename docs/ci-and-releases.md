@@ -60,6 +60,8 @@ Windows and macOS cannot build on the runner the same way. A macOS build needs A
 
 File names come from `artifactName` in [`_scripts/ebuilder.config.mjs`](../_scripts/ebuilder.config.mjs): `freetube-<version>-<os>-<arch>.<ext>`, with `-setup` and `-portable` before `.exe` on Windows. electron-builder leaves the architecture out of x64 names by default, which would make the Linux and Windows zips collide in one release.
 
+The AppImage, deb, rpm and pacman targets substitute their distro's architecture spelling for `${arch}` (`x86_64`, `amd64`, `aarch64`) whatever the pattern says, so `build-linux` renames those files to the `x64`/`arm64` form after building. That step then checks the leg produced all six Linux packages, since `upload-artifact` only fails when no file at all matches.
+
 | OS | Packages per architecture |
 |---|---|
 | Linux | `.AppImage`, `.deb`, `.rpm`, `.pacman`, `.zip`, `.7z` |
