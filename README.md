@@ -6,11 +6,19 @@ FreeTube is an open source desktop YouTube player built with privacy in mind.
 Use YouTube without advertisements and prevent Google from tracking you with their cookies and JavaScript.
 Available for Windows (10 and later), Mac (macOS 13 and later) & Linux thanks to Electron.
 
-<p align="center"><a href="https://github.com/FreeTubeApp/FreeTube/releases">Download FreeTube</a></p>
+> [!IMPORTANT]
+> **This is a single-maintainer fork of [FreeTubeApp/FreeTube](https://github.com/FreeTubeApp/FreeTube).** It is not affiliated with or endorsed by the FreeTube team.
+>
+> Upstream moves slowly and some bugs have been open for a long time (for example, the subscription reload issues). This fork uses AI-assisted workflows (Claude Code, under human direction) to fix them directly. All code changes here are AI-authored.
+>
+> - **No external contributions are accepted.** Pull requests from outside parties are closed without review. See [CONTRIBUTING.md](CONTRIBUTING.md).
+> - **No feature requests or support.**
+> - **Do not report this fork's bugs upstream.** The FreeTube team does not support this fork.
+>
+> The rest of this README is upstream's, adjusted where it conflicts with this fork. For official builds and support, use [upstream FreeTube](https://github.com/FreeTubeApp/FreeTube).
+
+<p align="center"><a href="https://github.com/FreeTubeApp/FreeTube/releases">Download upstream FreeTube</a></p>
 <p align="center">
-  <a href="https://github.com/FreeTubeApp/FreeTube/actions/workflows/build.yml">
-    <img alt='Build status' src="https://github.com/FreeTubeApp/FreeTube/actions/workflows/build.yml/badge.svg?branch=development" />
-  </a>
   <a href="https://hosted.weblate.org/engage/free-tube/">
     <img src="https://hosted.weblate.org/widgets/free-tube/-/svg-badge.svg" alt="Translation status" />
   </a>
@@ -23,8 +31,6 @@ Available for Windows (10 and later), Mac (macOS 13 and later) & Linux thanks to
 
 > [!NOTE] 
 > FreeTube is currently in Beta. While it should work well for most users, there are still bugs and missing features that need to be addressed.
->
-> If you have an idea or if you found a bug, please submit a [GitHub issue](https://github.com/FreeTubeApp/FreeTube/issues/new/choose) so that we can track it.  Please [search the existing issues](https://github.com/FreeTubeApp/FreeTube/issues?q=is%3Aissue+sort%3Arelevance-desc) before submitting to prevent duplicates!
 
 ## Screenshots
 | The main FreeTube window                                                                         |
@@ -104,16 +110,8 @@ RedirectTube, doesn’t automatically open YouTube links in FreeTube (although t
 
 * Flatpak on Flathub: [Download](https://flathub.org/apps/details/io.freetubeapp.FreeTube) and [Source Code](https://github.com/flathub/io.freetubeapp.FreeTube)
 
-#### Automated Builds (Nightly / Weekly)
-> [!WARNING]
-> Use these builds at your own risk. These are pre-release versions and are only intended for people that want to test changes early and are willing to accept that things could break from one build to another. 
-
-Builds are automatically created from changes to our development branch via [GitHub Actions](https://github.com/FreeTubeApp/FreeTube/actions?query=workflow%3ABuild).
-
-The first build with a green check mark is the latest build.  
-
-> [!IMPORTANT]
-> You will need to have a GitHub account to download these builds.
+#### This fork's builds
+This fork has no CI or release builds yet. The upstream pipelines are disabled while CI is rebuilt on a self-hosted runner (see [`.github/workflows-disabled/`](.github/workflows-disabled/README.md)). Until then, build from source with `pnpm install && pnpm run build`.
 
 ### Projects maintained by individual FreeTube team members
 * Homebrew FreeTube (Apple Silicon only): [Install](https://github.com/PikachuEXE/homebrew-FreeTube)
@@ -124,15 +122,13 @@ The first build with a green check mark is the latest build.
 > These projects are related to FreeTube and are maintained by individual members of the FreeTube team. While they are not part of the main FreeTube project, they may be useful to FreeTube users. There may be issues when using these projects compared to the official builds. Any issues specific to these builds should be reported to their respective maintainers. Make sure you always try an [official download](https://github.com/freetubeapp/freetube/#official-downloads) before reporting your issue to us!
 
 ## Contributing
-Thank you very much to the [People and Projects](https://docs.freetubeapp.io/credits/) that make FreeTube possible!
+This fork does not accept external contributions; see [CONTRIBUTING.md](CONTRIBUTING.md). Development happens on `main`, with feature branches off it.
 
-If you like to get your hands dirty and want to contribute, we would love to
-have your help.  Send a pull request and someone will review your code. 
-
-> [!IMPORTANT]
-> Please follow the [Contribution Guidelines](https://github.com/FreeTubeApp/FreeTube/blob/development/CONTRIBUTING.md) before sending your pull request.
+Thank you very much to the [People and Projects](https://docs.freetubeapp.io/credits/) that make FreeTube possible, and to the upstream FreeTube team, whose work this fork builds on.
 
 ## Localization
+Translations come from upstream FreeTube's Weblate project and are pulled in when this fork syncs with upstream. To help translate, contribute there:
+
 <a href="https://hosted.weblate.org/engage/free-tube/">
 <img src="https://hosted.weblate.org/widgets/free-tube/-/287x66-grey.png" alt="Translation status" />
 </a>
@@ -142,7 +138,9 @@ We are actively looking for translations!  We use [Weblate](https://hosted.webla
 For the Linux Flatpak, the desktop entry comment string can be translated at our [Flatpak repository](https://github.com/flathub/io.freetubeapp.FreeTube/blob/master/io.freetubeapp.FreeTube.desktop).
 
 ## Contact
-If you ever have any questions, feel free to ask it on our [Discussions](https://github.com/FreeTubeApp/FreeTube/discussions) page.  Alternatively, you can join our [Matrix Space](https://matrix.to/#/#freetubeapp:matrix.org).  
+This fork offers no support channel. The contact and donation details below belong to upstream FreeTube and are for upstream only.
+
+If you ever have any questions about upstream FreeTube, feel free to ask it on their [Discussions](https://github.com/FreeTubeApp/FreeTube/discussions) page.  Alternatively, you can join our [Matrix Space](https://matrix.to/#/#freetubeapp:matrix.org).  
 
 > [!IMPORTANT]
 > Don't forget to check out the [rules](https://docs.freetubeapp.io/community/matrix/) before joining.
