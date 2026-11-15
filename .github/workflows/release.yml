@@ -153,6 +153,30 @@ jobs:
       - name: Build
         run: pnpm run ${{ matrix.arch == 'arm64' && 'build:arm64' || 'build' }}
 
+      # The AppImage, deb, rpm and pacman targets spell ${arch} the way their
+      # distro does (x86_64, amd64, aarch64), whatever artifactName says.
+      # Rename them to the x64/arm64 names every other package uses, then
+      # check the leg produced all six, since upload-artifact only fails when
+      # nothing at all matches.
+      - name: Normalise Linux package names
+        working-directory: build
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          shopt -s nullglob
+          for f in *-linux-x86_64.* *-linux-amd64.* *-linux-aarch64.*; do
+            mv -v -- "$f" "$(sed -E "s/-linux-(x86_64|amd64|aarch64)\./-linux-${ARCH}./" <<<"$f")"
+          done
+          status=0
+          for ext in deb rpm pacman AppImage zip 7z; do
+            if ! compgen -G "*-linux-${ARCH}.${ext}" >/dev/null; then
+              echo "ERROR: no package matching *-linux-${ARCH}.${ext}" >&2
+              status=1
+            fi
+          done
+          ls -la
+          exit "${status}"
+
       - name: Upload packages
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
