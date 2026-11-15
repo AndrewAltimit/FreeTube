@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeTube Fork</title>
+  <meta name="description" content="A maintained fork of FreeTube, the private YouTube desktop client, with downloads for Windows, macOS and Linux.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a class="brand" href="./"><img src="icon.svg" alt="" width="28" height="28"><span>FreeTube <em>fork</em></span></a>
+      <nav>
+        <a href="#download">Download</a>
+        <a href="{{REPO_URL}}/tree/main/docs">Docs</a>
+        <a href="{{REPO_URL}}">Source</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <h1>YouTube, without the tracking.</h1>
+      <p class="lede">A single-maintainer fork of <a href="https://github.com/FreeTubeApp/FreeTube">FreeTube</a>, the open-source desktop client that keeps your subscriptions, history and settings on your own machine. This fork fixes long-standing bugs directly and ships the OLED black theme by default.</p>
+      <p class="cta"><a class="button" href="#download">Download</a><a class="button ghost" href="{{REPO_URL}}">View source</a></p>
+    </section>
+
+    <section class="wrap points">
+      <div><h2>Private by design</h2><p>No Google account, no ads, no telemetry. Subscriptions and playlists live in local databases you can export at any time.</p></div>
+      <div><h2>Tracks upstream</h2><p>Upstream changes and translations are merged in regularly; this fork adds bug fixes on top and stays close to upstream's code.</p></div>
+      <div><h2>Every platform</h2><p>Windows, macOS and Linux, each as x64 and ARM64 builds, with a SHA256 checksum for every file.</p></div>
+    </section>
+
+    <section id="download" class="wrap downloads">
+      <h2>Download</h2>
+      {{DOWNLOADS}}
+    </section>
+
+    <section class="wrap notes">
+      <h2>Good to know</h2>
+      <ul>
+        <li><strong>Not the official build.</strong> For FreeTube from its own team, go to <a href="https://freetubeapp.io/">freetubeapp.io</a>. Please report problems with these builds on this fork, not upstream.</li>
+        <li><strong>macOS:</strong> builds are ad-hoc signed, not notarised. On first launch, right-click the app and choose Open, or allow it under System Settings &gt; Privacy &amp; Security.</li>
+        <li><strong>Your data:</strong> the fork reads the same profile directory as official FreeTube, so it opens your existing subscriptions. Back up the profile first if you plan to switch between the two.</li>
+        <li><strong>How to use FreeTube:</strong> see upstream's <a href="https://docs.freetubeapp.io/">user documentation</a>.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>FreeTube is free software under the <a href="{{REPO_URL}}/blob/main/LICENSE">AGPL-3.0</a>. This fork is not affiliated with the FreeTube team or with YouTube.</p>
+  </footer>
+
+  <script>
+    // Highlights the visitor's platform card. Reads the browser's own
+    // platform string only; nothing is sent anywhere.
+    (function () {
+      var p = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase()
+      var os = p.indexOf('win') !== -1 ? 'win' : (p.indexOf('mac') !== -1 ? 'mac' : (p.indexOf('linux') !== -1 ? 'linux' : null))
+      var card = os && document.querySelector('.card[data-os="' + os + '"]')
+      if (card) {
+        card.classList.add('mine')
+        card.parentNode.insertBefore(card, card.parentNode.firstChild)
+      }
+    })()
+  </script>
+</body>
+</html>

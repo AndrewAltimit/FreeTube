@@ -1,0 +1,87 @@
+# CI and releases
+
+The fork's GitHub Actions: the gate on every pull request and push to `main`, the tagged release pipeline, and the GitHub Pages site. Upstream's workflows that these replace are gone from [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md); the rest stay parked there.
+
+| Workflow | Runs on | Does |
+|---|---|---|
+| [`ci.yml`](../.github/workflows/ci.yml) | PRs, pushes to `main` | `lint`, `test`, `pack`, `pack:web` |
+| [`release.yml`](../.github/workflows/release.yml) | `v*` tag pushes, manual dispatch | Gate, six platform builds, one GitHub release |
+| [`pages.yml`](../.github/workflows/pages.yml) | `site/` changes, manual dispatch, after each release | Builds `site/` and deploys it to GitHub Pages |
+
+## The runner
+
+Every job that can runs on the maintainer's self-hosted runner, selected with `runs-on: [self-hosted, Linux, ARM64]`. It is an **arm64 Linux** machine shared with the maintainer's other projects, so jobs on it queue one at a time.
+
+Node and pnpm come from `actions/setup-node` and `pnpm/action-setup` on every run, at the versions upstream's workflows used (Node 24, pnpm 11), so the runner needs no Node install of its own. Action references are pinned to commit SHAs.
+
+The Linux release builds need two system packages that the workflow cannot install itself (no root). Provision the runner once:
+
+```bash
+sudo apt install rpm libarchive-tools
+```
+
+[`_scripts/ci/check-linux-packaging-host.sh`](../_scripts/ci/check-linux-packaging-host.sh) runs at the start of each Linux build and fails with that command if either is missing.
+
+## CI
+
+`ci.yml` runs the gate the root `CLAUDE.md` names: `pnpm run lint`, `pnpm test`, `pnpm run pack`, `pnpm run pack:web`. A new push to a pull request cancels that PR's previous run. Tags are not handled here; `release.yml` re-runs the gate itself, so a release does not queue a second identical run on the single runner.
+
+## Releases
+
+### Cutting a release
+
+```bash
+git tag v0.26.0
+git push origin v0.26.0
+```
+
+The tag must start with `v` plus the `version` in `package.json`, optionally followed by a suffix (`v0.26.0-fork.1`); `verify` fails otherwise, so file names always match the tag. A tag containing `-` is published as a pre-release. Bump `package.json` in a commit on `main` before tagging a new version.
+
+A **dry run** builds everything without publishing: Actions > Release > Run workflow, give a tag, branch or commit, and leave *publish* unchecked. The packages are then downloadable as workflow artifacts for seven days.
+
+### Jobs
+
+| Job | Runner | Builds |
+|---|---|---|
+| `verify` | self-hosted | Tag/version check, `lint`, `test`, `pack:web` |
+| `build-linux` | self-hosted (arm64) | `linux-x64`, `linux-arm64` |
+| `build-windows` | GitHub-hosted `windows-latest` | `win-x64`, `win-arm64` |
+| `build-macos` | GitHub-hosted `macos-latest` | `mac-x64`, `mac-arm64` |
+| `publish` | self-hosted | `SHA256SUMS`, the release, a site redeploy |
+
+Each build job is a matrix over `x64` and `arm64`, and each leg uploads its own workflow artifact (`freetube-linux-x64`, `freetube-win-arm64` and so on), never one combined bundle. `publish` waits for `verify` and every build leg, checks that every OS/architecture pair produced every package listed below, writes `SHA256SUMS`, and makes the single release edit with the runner's `gh`. A release therefore never appears with a platform missing or ahead of the gate. The hosted builds start alongside `verify` instead of after it, since nothing is published until it passes.
+
+### Why Windows and macOS build on hosted runners
+
+electron-builder ships arm64-hosted builds of fpm, the AppImage tools and 7-Zip, so both Linux architectures package on the arm64 runner. The x64 Linux build is a cross-package: it downloads the x64 Electron and packs it, compiling nothing.
+
+Windows and macOS cannot build on the runner the same way. A macOS build needs Apple's SDK, which cannot be put on a Linux machine. For Windows, the NSIS compiler (`makensis`) and the resource tooling electron-builder runs are not reliable on an arm64 Linux host. Both therefore build on GitHub-hosted runners, as upstream's builds do. Hosted minutes are free for a public repository.
+
+### Packages
+
+File names come from `artifactName` in [`_scripts/ebuilder.config.mjs`](../_scripts/ebuilder.config.mjs): `freetube-<version>-<os>-<arch>.<ext>`, with `-setup` and `-portable` before `.exe` on Windows. electron-builder leaves the architecture out of x64 names by default, which would make the Linux and Windows zips collide in one release.
+
+| OS | Packages per architecture |
+|---|---|
+| Linux | `.AppImage`, `.deb`, `.rpm`, `.pacman`, `.zip`, `.7z` |
+| Windows | `-setup.exe` (NSIS), `-portable.exe`, `.zip`, `.7z` |
+| macOS | `.dmg`, `.zip`, `.7z` |
+
+macOS builds are ad-hoc signed (`identity: '-'` in the builder config), not notarised; Gatekeeper asks the user to confirm the first launch. Nothing is code-signed on Windows.
+
+## GitHub Pages site
+
+The site's source is [`site/`](../site/): `index.html` (a template), `style.css`, and `build.mjs`, which writes the finished site to `site/dist/` (gitignored). `build.mjs` takes the JSON from `GET /repos/{owner}/{repo}/releases`, picks the newest published release (falling back to a pre-release when there is no full release), and renders its assets into the download table. The page makes no API calls of its own; every download link is plain HTML. Its one script highlights the visitor's OS card from the browser's platform string.
+
+To preview locally:
+
+```bash
+gh api repos/AndrewAltimit/FreeTube/releases > releases.json
+node site/build.mjs releases.json      # without the argument: the no-release page
+```
+
+`pages.yml` deploys on pushes to `main` that touch `site/`, on manual dispatch, and after every published release. A release made with `GITHUB_TOKEN` fires no `release` event for other workflows, so `release.yml`'s last step starts `pages.yml` with `gh workflow run`; `workflow_dispatch` is the one event that token can trigger. Pull requests touching `site/` build it without deploying.
+
+The repository's Pages source must be set to **GitHub Actions** (Settings > Pages) for the deploy job to work.
+
+The asset-name pattern `build.mjs` parses is tested against the builder config's `artifactName` patterns in `tests/unit/site/build.test.js`, so renaming packages in one place without the other fails the suite.

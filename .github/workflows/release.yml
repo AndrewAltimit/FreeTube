@@ -1,0 +1,378 @@
+---
+# Tagged-release pipeline for the fork.
+#
+# Pushing a v* tag builds FreeTube for six OS/architecture pairs, uploads
+# each pair as its own workflow artifact, and attaches every package plus a
+# SHA256SUMS file to that tag's GitHub release (creating the release when the
+# tag has none).
+#
+#   verify          self-hosted     the CI gate (lint, test, pack:web) + tag/version check
+#   build-linux     self-hosted     linux-x64, linux-arm64
+#   build-windows   windows-latest  win-x64, win-arm64
+#   build-macos     macos-latest    mac-x64, mac-arm64
+#   publish         self-hosted     SHA256SUMS + the one release edit, then a site redeploy
+#
+# The self-hosted runner is arm64 Linux. electron-builder ships arm64-hosted
+# builds of fpm, the AppImage tools and 7-Zip, so both Linux architectures
+# package there (x64 is a cross-package: it only downloads the x64 Electron).
+# Windows and macOS build on GitHub-hosted runners, free for this public
+# repo: macOS needs Apple's SDK, and NSIS and the Windows resource tooling are
+# not reliable on an arm64 Linux host. Upstream builds every Windows and
+# macOS package the same way.
+#
+# The build jobs only upload workflow artifacts. `publish` waits for all of
+# them AND for `verify`, so a release never appears with a platform missing
+# and never ahead of the gate. The Windows and macOS jobs start alongside
+# `verify` rather than after it; nothing they build is published until it is
+# green. See docs/ci-and-releases.md.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build, e.g. v0.26.0. A build-only dry run (publish unchecked) also takes a branch or commit.'
+        required: true
+        type: string
+      publish:
+        description: 'Attach the packages to the GitHub release. Leave unchecked to build only.'
+        required: false
+        default: false
+        type: boolean
+
+# One release at a time, and never cancel one midway through uploading.
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  NODE_VERSION: 24.x
+  PNPM_VERSION: 11
+
+jobs:
+  # -- Gate -------------------------------------------------------------------
+  # Mirrors ci.yml. `pack` itself runs in every build job below.
+  verify:
+    name: Verify
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      # A tag must name the version package.json carries (optionally with a
+      # suffix such as -fork.1), so a release's file names match its tag.
+      - name: Tag matches package.json version
+        if: github.event_name == 'push' || inputs.publish
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          case "${RELEASE_TAG}" in
+            "v${version}"|"v${version}"-*) echo "Tag ${RELEASE_TAG} matches version ${version}" ;;
+            *)
+              echo "ERROR: tag '${RELEASE_TAG}' does not start with v${version} (package.json)" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Use Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Pack web build
+        run: pnpm run pack:web
+
+  # -- Linux (self-hosted arm64) ----------------------------------------------
+  # One matrix leg per architecture, so each uploads its own artifact. The
+  # single runner takes them one after the other.
+  build-linux:
+    name: Build (linux-${{ matrix.arch }})
+    needs: [verify]
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Check packaging tools
+        run: bash _scripts/ci/check-linux-packaging-host.sh
+
+      - name: Use Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run ${{ matrix.arch == 'arm64' && 'build:arm64' || 'build' }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: freetube-linux-${{ matrix.arch }}
+          overwrite: true
+          path: |
+            build/*-linux-${{ matrix.arch }}.deb
+            build/*-linux-${{ matrix.arch }}.rpm
+            build/*-linux-${{ matrix.arch }}.pacman
+            build/*-linux-${{ matrix.arch }}.AppImage
+            build/*-linux-${{ matrix.arch }}.zip
+            build/*-linux-${{ matrix.arch }}.7z
+          if-no-files-found: error
+          retention-days: 7
+
+  # -- Windows (GitHub-hosted) ------------------------------------------------
+  build-windows:
+    name: Build (win-${{ matrix.arch }})
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          cache: false
+
+      - name: Install dependencies
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        shell: bash
+        run: pnpm run ${{ matrix.arch == 'arm64' && 'build:arm64' || 'build' }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: freetube-win-${{ matrix.arch }}
+          overwrite: true
+          path: |
+            build/*-win-${{ matrix.arch }}-setup.exe
+            build/*-win-${{ matrix.arch }}-portable.exe
+            build/*-win-${{ matrix.arch }}.zip
+            build/*-win-${{ matrix.arch }}.7z
+          if-no-files-found: error
+          retention-days: 7
+
+  # -- macOS (GitHub-hosted) --------------------------------------------------
+  # Ad-hoc signed by the builder config (identity '-'), not notarised.
+  build-macos:
+    name: Build (mac-${{ matrix.arch }})
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run ${{ matrix.arch == 'arm64' && 'build:arm64' || 'build' }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: freetube-mac-${{ matrix.arch }}
+          overwrite: true
+          path: |
+            build/*-mac-${{ matrix.arch }}.dmg
+            build/*-mac-${{ matrix.arch }}.zip
+            build/*-mac-${{ matrix.arch }}.7z
+          if-no-files-found: error
+          retention-days: 7
+
+  # -- Checksums + publish ----------------------------------------------------
+  # A single job makes exactly one release edit; per-platform publishing
+  # would race on creating the release.
+  publish:
+    name: Checksums + Release
+    needs: [verify, build-linux, build-windows, build-macos]
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      # lets the last step start pages.yml (workflow_dispatch is the one
+      # event a GITHUB_TOKEN may trigger)
+      actions: write
+    steps:
+      # The runner's workspace persists: clear a dist/ an earlier run left.
+      - name: Clear dist
+        run: rm -rf dist
+
+      - name: Download packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: freetube-*
+          path: dist
+          merge-multiple: true
+
+      # Every OS/architecture pair must have produced every package it builds,
+      # so a release can never ship with a platform or a format missing.
+      - name: Check every package is present
+        working-directory: dist
+        run: |
+          status=0
+          expect() {
+            if ! compgen -G "*-$1" >/dev/null; then
+              echo "ERROR: no package matching *-$1" >&2
+              status=1
+            fi
+          }
+          for arch in x64 arm64; do
+            for ext in deb rpm pacman AppImage zip 7z; do expect "linux-${arch}.${ext}"; done
+            for suffix in -setup.exe -portable.exe .zip .7z; do expect "win-${arch}${suffix}"; done
+            for ext in dmg zip 7z; do expect "mac-${arch}.${ext}"; done
+          done
+          ls -la
+          exit "${status}"
+
+      - name: Write SHA256SUMS
+        working-directory: dist
+        run: |
+          rm -f SHA256SUMS
+          sha256sum -- * > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Summary
+        run: |
+          {
+            echo "## Release ${RELEASE_TAG}"
+            echo ""
+            echo "| Package | Size |"
+            echo "|---|---|"
+            for f in dist/*; do
+              [ "$(basename "$f")" = SHA256SUMS ] && continue
+              echo "| \`$(basename "$f")\` | $(du -h "$f" | cut -f1) |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refuse to publish a non-tag
+        # A dispatch may build a branch as a dry run, but publishing one would
+        # make the release step mint a new tag. Only an existing tag publishes.
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "ERROR: '${RELEASE_TAG}' is not an existing tag; refusing to publish" >&2
+            exit 1
+          fi
+
+      - name: Attach to GitHub release
+        # Tag pushes always publish; a dispatch publishes only when asked.
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(dist/*)
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            prerelease=()
+            if [[ "${RELEASE_TAG}" == *-* ]]; then
+              prerelease=(--prerelease)
+            fi
+            notes="${RUNNER_TEMP}/release-notes.md"
+            {
+              echo "Builds of this fork of FreeTube, one set of packages per OS and architecture."
+              echo "Verify a download against \`SHA256SUMS\`. macOS builds are ad-hoc signed, not notarised."
+            } > "${notes}"
+            gh release create "${RELEASE_TAG}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag --title "${RELEASE_TAG}" --notes-file "${notes}" --generate-notes \
+              "${prerelease[@]}"
+          fi
+
+      # The site's download table is generated from the latest release at
+      # deploy time, so redeploy it now that there is a new one.
+      - name: Redeploy the site
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main

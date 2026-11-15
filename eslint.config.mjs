@@ -433,7 +433,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['_scripts/**/*.mjs'],
+    files: ['_scripts/**/*.mjs', 'site/*.mjs'],
     languageOptions: {
       globals: globals.node,
       ecmaVersion: 'latest',

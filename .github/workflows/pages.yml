@@ -1,0 +1,106 @@
+---
+# Builds and deploys the GitHub Pages site (site/) on the self-hosted runner.
+#
+# The download table is generated from the newest published release at build
+# time (site/build.mjs), so the site redeploys whenever site/ changes on main
+# and whenever release.yml publishes a release (it starts this workflow with
+# `gh workflow run`, since a release made with GITHUB_TOKEN fires no
+# `release` event). Pull requests that touch the site build it without
+# deploying. See docs/ci-and-releases.md.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '_icons/icon.svg'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build site
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          package-manager-cache: false
+
+      - name: Fetch releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=20" > "${RUNNER_TEMP}/releases.json"
+
+      # No dependencies: build.mjs uses only Node's standard library.
+      - name: Build
+        run: node site/build.mjs "${RUNNER_TEMP}/releases.json"
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: site/dist/
+          # A re-run finds the earlier attempt's artifact in the same run, and
+          # deploy-pages refuses to choose between two with one name.
+          name: github-pages-attempt-${{ github.run_attempt }}
+
+  deploy:
+    name: Deploy
+    needs: [build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 30
+    # Two deploys in quick succession would race; queue them, never cancel.
+    concurrency:
+      group: github-pages-deploy
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url }}
+    steps:
+      # GitHub's side of a deploy sometimes sits in `syncing_files` past the
+      # action's 10-minute poll; a fresh deploy of the same artifact after a
+      # back-off normally goes through.
+      - name: Deploy to GitHub Pages
+        id: deploy1
+        continue-on-error: true
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+        with:
+          timeout: 600000
+          artifact_name: github-pages-attempt-${{ github.run_attempt }}
+
+      - name: Back off before retrying
+        if: steps.deploy1.outcome == 'failure'
+        run: |
+          echo "::warning::Pages deploy attempt 1 failed; retrying in 60 s"
+          sleep 60
+
+      - name: Deploy to GitHub Pages (retry)
+        id: deploy2
+        if: steps.deploy1.outcome == 'failure'
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+        with:
+          timeout: 600000
+          artifact_name: github-pages-attempt-${{ github.run_attempt }}
