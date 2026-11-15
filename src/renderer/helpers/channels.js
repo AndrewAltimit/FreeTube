@@ -46,7 +46,8 @@ export async function findChannelTagInfo(id, backendOptions) {
   if (!checkYoutubeChannelId(id)) return { invalidId: true }
   try {
     const channel = await findChannelById(id, backendOptions)
-    if (!process.env.SUPPORTS_LOCAL_API || backendOptions.preference === 'invidious') {
+    // the fallback may have answered from the other backend, so check the shape of the result
+    if (!process.env.SUPPORTS_LOCAL_API || channel.invalid || channel.authorThumbnails) {
       if (channel.invalid) return { invalidId: true }
       return {
         preferredName: channel.author,

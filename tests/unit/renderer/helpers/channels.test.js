@@ -89,12 +89,17 @@ describe('findChannelTagInfo', () => {
     expect(getLocalChannel).not.toHaveBeenCalled()
   })
 
-  // BUG: findChannelTagInfo picks the result parser from `backendOptions.preference`,
-  // not from the backend that actually answered (channels.js:50-64). When the
-  // Invidious request fails and findChannelById falls back to the Local API, the
-  // Local channel object is read as if it were Invidious (`channel.authorThumbnails[0]`)
-  // and throws, so the fallback never yields a result.
-  it.fails('falls back from Invidious to Local when enabled', async () => {
+  it('reports a channel the Local API says does not exist as invalid', async () => {
+    getLocalChannel.mockRejectedValue(new Error('This channel does not exist.'))
+
+    expect(await findChannelTagInfo(VALID_ID, local)).toEqual({ invalidId: true })
+    expect(parseLocalChannelHeader).not.toHaveBeenCalled()
+  })
+
+  // Regression: the result parser used to be picked from `backendOptions.preference`,
+  // not from the backend that answered, so the Local fallback result was read as
+  // Invidious (`channel.authorThumbnails[0]`) and threw.
+  it('falls back from Invidious to Local when enabled', async () => {
     invidiousGetChannelInfo.mockRejectedValue(new Error('instance down'))
     getLocalChannel.mockResolvedValue({ header: { type: 'PageHeader' } })
     parseLocalChannelHeader.mockReturnValue({ name: 'Local Name', thumbnailUrl: 'https://img/local' })
@@ -105,10 +110,9 @@ describe('findChannelTagInfo', () => {
     expect(result).toMatchObject({ preferredName: 'Local Name', icon: 'https://img/local' })
   })
 
-  // BUG: the mirror case. A Local failure falls back to Invidious, but the
-  // Invidious object is then passed to parseLocalChannelHeader, which reads
-  // `channel.header.type` and throws (channels.js:57-64).
-  it.fails('falls back from Local to Invidious when enabled', async () => {
+  // Regression: the mirror case. The Invidious fallback result used to be passed
+  // to parseLocalChannelHeader, which reads `channel.header.type` and throws.
+  it('falls back from Local to Invidious when enabled', async () => {
     getLocalChannel.mockRejectedValue(new Error('local broke'))
     invidiousGetChannelInfo.mockResolvedValue({ author: 'Inv', authorThumbnails: [{ url: 'u' }] })
     // Mimic the real parser: it dereferences `channel.header.type` first.

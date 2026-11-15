@@ -162,11 +162,9 @@ describe('buildVTTFileLocally', () => {
     expect(vtt).toContain('00:01:15.000 --> 00:01:40.000')
   })
 
-  // BUG: the rollover only subtracts 60 once per cue (utils.js:146-153), so an
-  // interval of 60 s or more (possible when it is derived from a long video's
-  // length, or on coarse storyboard levels) produces timestamps like
-  // "00:00:1800.000", which are invalid WebVTT.
-  it.fails('rolls intervals of a minute or more over into minutes and hours', () => {
+  // Regression: the rollover used to subtract 60 only once per cue, so an interval
+  // of 60 s or more produced timestamps like "00:00:1800.000" (invalid WebVTT).
+  it('rolls intervals of a minute or more over into minutes and hours', () => {
     const vtt = utils.buildVTTFileLocally({ ...storyboard, interval: 30 * 60 * 1000, columns: 1, rows: 3, thumbnail_count: 3 }, 0)
 
     expect(vtt).toContain('00:00:00.000 --> 00:30:00.000')
@@ -360,10 +358,9 @@ describe('searchFiltersMatch', () => {
     expect(utils.searchFiltersMatch(filters, null)).toBeFalsy()
   })
 
-  // Both arguments are documented as nullable, but with no features on either side
-  // the final `every` short-circuits to `undefined` (utils.js:530), so two
-  // equally-empty filter sets are reported as not matching.
-  it.fails('matches two missing filter objects', () => {
+  // Regression: with no features on either side the final `every` short-circuited
+  // to `undefined`, so two equally-empty filter sets were reported as not matching.
+  it('matches two missing filter objects', () => {
     expect(utils.searchFiltersMatch(null, null)).toBe(true)
   })
 })
@@ -500,12 +497,18 @@ describe('toDistractionFreeTitle', () => {
     expect(utils.toDistractionFreeTitle('Not OK', 2)).toBe('Not Ok')
   })
 
-  // BUG: the character class `[\p{Lu}|']` (utils.js:740) contains a literal `|`,
-  // so a run like "|||" (or "'''") matches. capitalizedWord then finds no letter
-  // (index -1) and calls `undefined.toUpperCase()`, throwing a TypeError for
-  // titles such as "Part 1 ||| Part 2".
-  it.fails('does not throw on a run of pipes', () => {
+  // Regression: the character class `[\p{Lu}|']` contained a literal `|`, so a run
+  // like "|||" matched, capitalizedWord found no letter and threw a TypeError.
+  it('does not throw on a run of pipes', () => {
     expect(utils.toDistractionFreeTitle('Part 1 ||| Part 2')).toBe('Part 1 ||| Part 2')
+  })
+
+  it('does not throw on a run of apostrophes', () => {
+    expect(utils.toDistractionFreeTitle("it's ''' fine")).toBe("it's ''' fine")
+  })
+
+  it('does not treat pipes as part of an upper case run', () => {
+    expect(utils.toDistractionFreeTitle('AB|CD')).toBe('AB|CD')
   })
 })
 
