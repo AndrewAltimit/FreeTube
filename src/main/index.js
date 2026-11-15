@@ -18,6 +18,7 @@ import {
   SEARCH_CHAR_LIMIT,
   LIGHT_BASE_THEMES,
   DARK_BASE_THEMES,
+  DEFAULT_BASE_THEME,
   UI_SCALE,
 } from '../constants'
 import * as baseHandlers from '../datastores/handlers/base'
@@ -783,9 +784,7 @@ function runApp() {
     try {
       const baseTheme = await baseHandlers.settings._findOne('baseTheme')
 
-      if (baseTheme?.value) {
-        updateThemeSource(baseTheme.value)
-      }
+      updateThemeSource(baseTheme?.value || DEFAULT_BASE_THEME)
     } catch {}
 
     await createWindow()
@@ -947,13 +946,9 @@ function runApp() {
     } = { }) {
     // Syncing new window background to theme choice.
     const windowBackground = await baseHandlers.settings._findOne('baseTheme').then((setting) => {
-      if (!setting) {
-        return nativeTheme.shouldUseDarkColors ? '#212121' : '#f1f1f1'
-      }
-
       // Determine window color to be shown (shown most prominently during initial app load)
       // Uses the --bg-color for each corresponding theme
-      switch (setting.value) {
+      switch (setting?.value || DEFAULT_BASE_THEME) {
         case 'dark':
           return '#212121'
         case 'light':

@@ -1,6 +1,6 @@
 import i18n, { loadLocale } from '../../i18n/index'
 import allLocales from '../../../../static/locales/activeLocales.json'
-import { MAIN_PROFILE_ID, SyncEvents } from '../../../constants'
+import { DEFAULT_BASE_THEME, MAIN_PROFILE_ID, SyncEvents } from '../../../constants'
 import { DBSettingHandlers } from '../../../datastores/handlers/index'
 import { getSystemLocale, showToast } from '../../helpers/utils'
 
@@ -164,7 +164,7 @@ const state = {
   backendPreference: !process.env.SUPPORTS_LOCAL_API ? 'invidious' : 'local',
   barColor: false,
   checkForUpdates: true,
-  baseTheme: 'system',
+  baseTheme: DEFAULT_BASE_THEME,
   mainColor: 'Red',
   secColor: 'Blue',
   defaultAutoplayInterruptionIntervalHours: 3,
@@ -211,7 +211,7 @@ const state = {
   hideVideoDescription: false,
   hideLiveChat: false,
   hideLiveStreams: false,
-  hideHeaderLogo: false,
+  hideHeaderLogo: true,
   hidePlaylists: false,
   hidePopularVideos: false,
   hideRecommendedVideos: false,

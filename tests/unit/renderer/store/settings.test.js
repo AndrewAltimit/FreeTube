@@ -5,6 +5,7 @@ import { DBSettingHandlers } from '../../../../src/datastores/handlers/index.js'
 import i18n, { loadLocale } from '../../../../src/renderer/i18n/index.js'
 import { getSystemLocale, showToast } from '../../../../src/renderer/helpers/utils.js'
 import settings, { defaultUpdaterId, NON_TRANSFERABLE_SETTINGS } from '../../../../src/renderer/store/modules/settings.js'
+import { DEFAULT_BASE_THEME } from '../../../../src/constants.js'
 
 vi.mock('../../../../src/datastores/handlers/index.js', async () =>
   (await import('./helpers/db-handlers-mock.js')).createDBHandlersMock())
@@ -380,5 +381,19 @@ describe('settings store module', () => {
       }
       expect(NON_TRANSFERABLE_SETTINGS.has('region')).toBe(false)
     })
+  })
+})
+
+describe('fork visual defaults', () => {
+  it('starts a fresh profile on the OLED black theme', () => {
+    expect(DEFAULT_BASE_THEME).toBe('black')
+    expect(settings.state.baseTheme).toBe(DEFAULT_BASE_THEME)
+  })
+
+  it('hides the header logo, keeps the compact labelled side bar and opens on subscriptions', () => {
+    expect(settings.state.hideHeaderLogo).toBe(true)
+    expect(settings.state.expandSideBar).toBe(false)
+    expect(settings.state.hideLabelsSideBar).toBe(false)
+    expect(settings.state.landingPage).toBe('subscriptions')
   })
 })
