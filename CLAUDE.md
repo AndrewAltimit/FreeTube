@@ -28,9 +28,9 @@ A single-maintainer fork of [FreeTubeApp/FreeTube](https://github.com/FreeTubeAp
 | [`_scripts/`](_scripts/) | Webpack configs per target, the dev runner, electron-builder config, locale and instance tooling. |
 | [`tests/`](tests/) | Vitest unit tests mirroring `src/`; config in `vitest.config.mjs` ([`docs/testing.md`](docs/testing.md)). |
 | [`docs/`](docs/README.md) | This fork's technical reference. Index at [`docs/README.md`](docs/README.md); writing rules in [`docs/CLAUDE.md`](docs/CLAUDE.md). |
-| [`.github/workflows/`](.github/workflows/) | CI gate, tagged releases and the Pages deploy, on the self-hosted arm64 runner ([`docs/ci-and-releases.md`](docs/ci-and-releases.md)). |
-| [`site/`](site/) | The GitHub Pages site; `build.mjs` renders the download table from the latest release. |
-| [`.github/workflows-disabled/`](.github/workflows-disabled/README.md) | Upstream workflows the fork has not rebuilt, parked. |
+| [`.github/workflows/`](.github/workflows/) | CI gate and tagged releases, on the self-hosted arm64 runner ([`docs/ci-and-releases.md`](docs/ci-and-releases.md)). |
+| [`site/`](site/) | A download page (`build.mjs` renders it from the latest release); its Pages workflow is parked, so nothing deploys it. |
+| [`.github/workflows-disabled/`](.github/workflows-disabled/README.md) | Upstream workflows the fork has not rebuilt, and the fork's Pages deploy, parked. |
 
 User-facing documentation (install, FAQ, usage) is upstream's at [docs.freetubeapp.io](https://docs.freetubeapp.io/); this repo's `docs/` covers how the code works and how the fork is run.
 

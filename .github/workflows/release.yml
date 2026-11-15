@@ -10,7 +10,7 @@
 #   build-linux     self-hosted     linux-x64, linux-arm64
 #   build-windows   windows-latest  win-x64, win-arm64
 #   build-macos     macos-latest    mac-x64, mac-arm64
-#   publish         self-hosted     SHA256SUMS + the one release edit, then a site redeploy
+#   publish         self-hosted     SHA256SUMS + the one release edit
 #
 # The self-hosted runner is arm64 Linux. electron-builder ships arm64-hosted
 # builds of fpm, the AppImage tools and 7-Zip, so both Linux architectures
@@ -276,9 +276,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
-      # lets the last step start pages.yml (workflow_dispatch is the one
-      # event a GITHUB_TOKEN may trigger)
-      actions: write
     steps:
       # The runner's workspace persists: clear a dist/ an earlier run left.
       - name: Clear dist
@@ -368,11 +365,3 @@ jobs:
               --verify-tag --title "${RELEASE_TAG}" --notes-file "${notes}" --generate-notes \
               "${prerelease[@]}"
           fi
-
-      # The site's download table is generated from the latest release at
-      # deploy time, so redeploy it now that there is a new one.
-      - name: Redeploy the site
-        if: github.event_name == 'push' || inputs.publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main

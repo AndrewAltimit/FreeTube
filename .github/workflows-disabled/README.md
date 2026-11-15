@@ -2,7 +2,9 @@
 
 The GitHub Actions workflows and workflow config inherited from upstream [FreeTubeApp/FreeTube](https://github.com/FreeTubeApp/FreeTube) that this fork has not rebuilt are parked here. GitHub only runs workflows from `.github/workflows/`, so nothing in this folder runs.
 
-The fork's own CI, release and Pages workflows live in `.github/workflows/` ([`docs/ci-and-releases.md`](../../docs/ci-and-releases.md)) and replace upstream's build, release, linter and site-update workflows. What remains here is kept for reference.
+The fork's own CI and release workflows live in `.github/workflows/` ([`docs/ci-and-releases.md`](../../docs/ci-and-releases.md)) and replace upstream's build, release, linter and site-update workflows. What remains here is kept for reference.
+
+The fork's own `pages.yml` is parked here too: it deploys the [`site/`](../../site/) download page to GitHub Pages, which the fork does not publish. Its header says how to switch it back on.
 
 | File | Upstream purpose |
 |---|---|
