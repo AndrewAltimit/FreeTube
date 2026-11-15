@@ -45,12 +45,12 @@ pnpm run checkforbadtemplates  # Vue templates referencing missing components
 pnpm run build               # pack all webpack targets + electron-builder for this platform
 ```
 
-There is **no automated test suite**. Verification is lint plus running the app; the [`verify` skill](.claude/skills/verify/SKILL.md) covers how.
+There is **no automated test suite**; upstream never had one. Upstream's CI gate was `pnpm run lint && pnpm run pack && pnpm run pack:web` (lint, then compile every target, including the web build), and that is the gate here before a commit lands on `main`. Beyond it, verification means running the app; the [`verify` skill](.claude/skills/verify/SKILL.md) covers how.
 
 ## Conventions
 
 - **Branches:** work on a feature branch off `main`, merge into `main`. There is no `development` branch in this fork's workflow ([`docs/fork-workflow.md`](docs/fork-workflow.md)).
-- **Lint is the gate.** `pnpm run lint` must pass. The lefthook pre-commit hook runs ESLint and Stylelint on staged files; don't bypass it.
+- **Lint and pack are the gate.** `pnpm run lint`, `pnpm run pack` and `pnpm run pack:web` must pass. The lefthook pre-commit hook runs ESLint and Stylelint on staged files only; don't bypass it, and don't treat it as the whole gate.
 - **Every user-visible string goes through i18n.** `vue-i18n/no-raw-text` and `no-dynamic-keys` are lint errors. Add keys to `static/locales/en-US.yaml` only.
 - **Both APIs, both builds.** A data-path change has to work with the Local API (`youtubei.js`) and Invidious, and must not break the web build. Guard Electron-only code with `process.env.IS_ELECTRON` and Local-API-only code with `process.env.SUPPORTS_LOCAL_API` ([`docs/architecture.md`](docs/architecture.md#build-targets-and-flags)).
 - **New settings follow the settings-module recipe.** The comment block at the top of [`src/renderer/store/modules/settings.js`](src/renderer/store/modules/settings.js) is authoritative; read it before adding one.

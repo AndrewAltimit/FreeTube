@@ -5,12 +5,14 @@ description: How to verify a change in this repo - lint gates, running the Elect
 
 # Verifying changes in FreeTube
 
-There is no automated test suite. A change is verified by the lint gates plus running the app through the path it touches.
+There is no automated test suite (upstream never had one). Upstream's CI gate was lint plus compiling every webpack target; this skill reproduces that, then has you run the app through the path the change touches.
 
 ## 1. Gates (always)
 
 ```bash
 pnpm run lint                   # ESLint + Stylelint; must pass
+pnpm run pack                   # compiles main, preload, renderer, botGuard; catches broken imports
+pnpm run pack:web               # compiles the web build; catches Electron-only code leaking into it
 pnpm run lint-all               # also lints locale YAML/JSON; run when static/locales/ changed
 pnpm run checkforbadtemplates   # when a template references a new or renamed component
 ```
@@ -38,8 +40,7 @@ Pick what the change touches:
 ## 4. Packaging (only when build config changed)
 
 ```bash
-pnpm run pack       # all webpack targets
-pnpm run build      # plus electron-builder for this platform
+pnpm run build      # pack + electron-builder for this platform
 ```
 
 Report what you ran and what you checked by hand. If something couldn't be verified (for example, a macOS-only path on Windows), say so.

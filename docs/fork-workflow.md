@@ -27,7 +27,7 @@ Resolve conflicts on the sync branch, run `pnpm install && pnpm run lint`, smoke
 
 ## CI
 
-All of upstream's workflows are parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md) and nothing runs. CI is being rebuilt for the maintainer's self-hosted runner. Until then, `pnpm run lint` locally (also run by the lefthook pre-commit hook) is the only gate.
+All of upstream's workflows are parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md) and nothing runs. CI is being rebuilt for the maintainer's self-hosted runner. Until then, the gate is upstream's CI run by hand: `pnpm run lint && pnpm run pack && pnpm run pack:web`. The lefthook pre-commit hook covers only the lint part, on staged files.
 
 ## Commits and PRs
 
