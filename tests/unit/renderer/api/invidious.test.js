@@ -339,14 +339,16 @@ describe('search and feeds', () => {
     expect(result.results[0].published).toBe(1700000000000)
   })
 
-  // Suspected bug: getInvidiousSearchResults has a `!results` guard (invidious.js:655),
-  // but invidiousAPICall reads `json.error` first (invidious.js:60), so a `null` body
-  // rejects with a TypeError and the guard is unreachable.
-  it.fails('returns an empty result shape for a null response', async () => {
+  // The `!results` guard in getInvidiousSearchResults (invidious.js:655) is unreachable:
+  // invidiousAPICall reads `json.error` first (invidious.js:60), so a `null` body rejects.
+  // That is the behaviour we want: SearchPage's catch shows the API error toast and falls
+  // back to the Local API, whereas its `!results` early return would leave the page-1
+  // spinner running with no feedback. Pin the rejection so the guard isn't "fixed" into use.
+  it('rejects for a null response so the search page can report it and fall back', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     mockApi({ search: null })
-    expect(await invidious.getInvidiousSearchResults('x', 1, { ...settings, prioritize: 'relevance', duration: '' }))
-      .toEqual({ results: null, validResultsCount: 0, rawResultsCount: 0 })
+    await expect(invidious.getInvidiousSearchResults('x', 1, { ...settings, prioritize: 'relevance', duration: '' }))
+      .rejects.toThrow(TypeError)
   })
 
   it('popular feed keeps videos, shorts, channels and playlists', async () => {

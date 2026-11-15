@@ -17,6 +17,7 @@ import {
   runs,
   shortsLockupViewModel,
   simple,
+  thumbnails,
   videoRenderer,
 } from './fixtures/innertube.js'
 
@@ -193,12 +194,9 @@ describe('parseLocalListVideo (Video)', () => {
     expect(video.author).toBe('Fallback')
   })
 
-  // Suspected bug (local.js:1948, same pattern at :1850 Movie and :1902 GridMovie):
-  // the authorId fallback checks `video.author.id !== 'N/A'`, but youtubei.js' Author
-  // only uses 'N/A' for the *name*; a missing owner leaves `id` undefined. So videos
-  // without ownerText (e.g. on channel tabs) get authorId undefined instead of channelId.
-  // The GridVideo branch (:1885) already does the right `!= null` check.
-  it.fails('falls back to the provided channel id when the owner is missing', () => {
+  // Regression: youtubei.js' Author only uses 'N/A' for the *name*; a missing owner
+  // leaves `id` undefined, so the authorId fallback has to check for null as well.
+  it('falls back to the provided channel id when the owner is missing', () => {
     const video = local.parseLocalListVideo(parse(videoRenderer({ owner: null })), 'UCfallback', 'Fallback')
     expect(video.authorId).toBe('UCfallback')
   })
@@ -206,6 +204,49 @@ describe('parseLocalListVideo (Video)', () => {
   it('drops members-only and unavailable videos', () => {
     expect(local.parseLocalListVideo(parse(videoRenderer({ badges: [['Members only', 'BADGE_STYLE_TYPE_MEMBERS_ONLY']] })))).toBeNull()
     expect(local.parseLocalListVideo(parse(videoRenderer({ title: 'This video isn\'t publicly available' })))).toBeNull()
+  })
+})
+
+describe('parseLocalListVideo (Movie)', () => {
+  function movieRenderer({ byline } = {}) {
+    return {
+      movieRenderer: {
+        videoId: 'movie000001',
+        title: runs(' Movie title '),
+        thumbnail: thumbnails(),
+        ...(byline ? { longBylineText: runs(byline.name, browseEndpoint(byline.id)) } : {}),
+        lengthText: simple('1:30:00'),
+        thumbnailOverlays: [],
+      },
+    }
+  }
+
+  it('uses the byline author when present', () => {
+    const video = local.parseLocalListVideo(parse(movieRenderer({ byline: { name: 'Studio', id: 'UCstudio' } })), 'UCfallback', 'Fallback')
+    expect(video).toMatchObject({ videoId: 'movie000001', title: 'Movie title', author: 'Studio', authorId: 'UCstudio', lengthSeconds: 5400 })
+  })
+
+  it('falls back to the provided channel name and id when the byline is missing', () => {
+    const video = local.parseLocalListVideo(parse(movieRenderer()), 'UCfallback', 'Fallback')
+    expect(video.author).toBe('Fallback')
+    expect(video.authorId).toBe('UCfallback')
+  })
+})
+
+describe('parseLocalListVideo (GridMovie)', () => {
+  // Regression: youtubei.js' GridMovie node has no `author` (nor `is_upcoming` /
+  // `upcoming`), and `movie.author.name` used to throw a TypeError for every GridMovie.
+  it('falls back to the provided channel name and id', () => {
+    const video = local.parseLocalListVideo(parse({
+      gridMovieRenderer: {
+        videoId: 'gridmovie01',
+        title: simple('Grid movie'),
+        thumbnail: thumbnails(),
+        lengthText: simple('1:30:00'),
+        thumbnailOverlays: [],
+      },
+    }), 'UCfallback', 'Fallback')
+    expect(video).toMatchObject({ videoId: 'gridmovie01', author: 'Fallback', authorId: 'UCfallback', lengthSeconds: 5400 })
   })
 })
 

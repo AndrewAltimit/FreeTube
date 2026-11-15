@@ -250,11 +250,11 @@ describe('SabrManifestParser', () => {
     expect(manifest.chapterStreams).toEqual([])
   })
 
-  // Suspected bug: in audio-only mode the parser picks the worst video format to use
+  // Regression: in audio-only mode the parser picks the worst video format to use
   // as a fake videoFormatId, but when the manifest has no video formats the reduce
   // returns null and buildFormatId(null) throws (SabrManifestParser.js:169 -> :291).
   // It should still produce audio-only variants (without a fake video format id).
-  it.fails('handles audio-only mode when the manifest has no video formats', async () => {
+  it('handles audio-only mode when the manifest has no video formats', async () => {
     const manifest = await parse({ formats: [audioFormat()] }, { disableVideo: true })
     expect(manifest.variants).toHaveLength(1)
   })

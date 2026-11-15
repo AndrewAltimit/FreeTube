@@ -169,7 +169,7 @@ class EbmlElement {
 
     // Ensure we have at most 53 meaningful bits.
     if ((this.dataView_.byteLength === 8) &&
-      (this.dataView_.getUint8(0) & 0xe0)) {
+      (this.dataView_.getUint8(0) || (this.dataView_.getUint8(1) & 0xe0))) {
       throw new ShakaError(
         ShakaError.Severity.CRITICAL,
         ShakaError.Category.MEDIA,

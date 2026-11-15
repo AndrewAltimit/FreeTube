@@ -102,11 +102,9 @@ describe('EbmlParser', () => {
     expect(element.getUint()).toBe(Number.MAX_SAFE_INTEGER)
   })
 
-  // Suspected bug (inherited from upstream shaka-player): getUint() only checks the
-  // top 3 bits of the first byte, so 8-byte values with up to 61 significant bits
-  // pass the "at most 53 meaningful bits" guard and silently lose precision.
-  // The guard should require the whole first byte and the top 3 bits of the second to be 0.
-  it.fails('rejects 8-byte unsigned integers between 54 and 61 significant bits', () => {
+  // Regression (bug inherited from shaka-player, still present in 5.3.4): the guard only
+  // checked the top 3 bits of the first byte, so 54-61 bit values silently lost precision.
+  it('rejects 8-byte unsigned integers between 54 and 61 significant bits', () => {
     const element = new EbmlParser(ebmlElement(0xb3, [0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])).parseElement()
     expectShakaError(() => element.getUint(), Code.JS_INTEGER_OVERFLOW)
   })

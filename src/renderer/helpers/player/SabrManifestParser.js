@@ -166,7 +166,9 @@ class SabrManifestParser {
         }
       }, null)
 
-      fakeVideoFormatId = buildFormatId(worstVideoFormat)
+      if (worstVideoFormat !== null) {
+        fakeVideoFormatId = buildFormatId(worstVideoFormat)
+      }
     }
 
     for (const format of manifestData.formats) {
