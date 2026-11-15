@@ -424,6 +424,15 @@ export default defineConfig([
     }
   },
   {
+    name: 'tests',
+    files: ['tests/**/*.js', 'vitest.config.mjs'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    },
+  },
+  {
     files: ['_scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,

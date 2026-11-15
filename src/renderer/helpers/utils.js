@@ -120,9 +120,9 @@ export function buildVTTFileLocally(storyboard, videoLengthSeconds) {
   let startHours = 0
   let startMinutes = 0
   let startSeconds = 0
-  let endHours = 0
-  let endMinutes = 0
-  let endSeconds = intervalInSeconds
+  let endHours = Math.floor(intervalInSeconds / 3600)
+  let endMinutes = Math.floor(intervalInSeconds / 60) % 60
+  let endSeconds = intervalInSeconds % 60
   for (let i = 0; i < numberOfImages; i++) {
     const currentUrl = storyboard.template_url.replace('$M.jpg', `${i}.jpg`)
     let xCoord = 0
@@ -143,11 +143,11 @@ export function buildVTTFileLocally(storyboard, videoLengthSeconds) {
       startMinutes = endMinutes
       startSeconds = endSeconds
       endSeconds += intervalInSeconds
-      if (endSeconds >= 60) {
+      while (endSeconds >= 60) {
         endSeconds -= 60
         endMinutes += 1
       }
-      if (endMinutes >= 60) {
+      while (endMinutes >= 60) {
         endMinutes -= 60
         endHours += 1
       }
@@ -527,7 +527,7 @@ export function searchFiltersMatch(filtersA, filtersB) {
     filtersA?.time === filtersB?.time &&
     filtersA?.type === filtersB?.type &&
     filtersA?.duration === filtersB?.duration &&
-    filtersA?.features?.length === filtersB?.features?.length && filtersA?.features?.every((val, index) => val === filtersB?.features[index])
+    filtersA?.features?.length === filtersB?.features?.length && (filtersA?.features?.every((val, index) => val === filtersB?.features[index]) ?? true)
 }
 
 /**
@@ -733,11 +733,13 @@ export function toDistractionFreeTitle(title, minUpperCase = 3) {
   const capitalizedWord = (word) => {
     const chars = word.split('')
     const index = firstValidCharIndex(word)
+    // a run of only apostrophes has no letter to capitalize
+    if (index === -1) return word
     chars[index] = chars[index].toUpperCase()
     return chars.join('')
   }
 
-  const reg = RegExp(`[\\p{Lu}|']{${minUpperCase},}`, 'ug')
+  const reg = RegExp(`[\\p{Lu}']{${minUpperCase},}`, 'ug')
   return title
     .replaceAll(/!{2,}/g, '!')
     .replaceAll(/[!?]{2,}/g, '?')

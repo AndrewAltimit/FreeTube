@@ -21,6 +21,14 @@ import { deepCopy } from '../utils'
 const AbortableOperation = shaka.util.AbortableOperation
 const ShakaError = shaka.util.Error
 
+// How far a buffered range may fall short of a segment boundary and still count that segment as buffered
+const BUFFERED_RANGE_TOLERANCE_SECONDS = 0.1
+
+// Policy-only responses (no media, no backoff) are retried immediately this many times, then with a growing delay
+const IMMEDIATE_POLICY_RETRIES = 2
+const MAX_POLICY_RETRY_DELAY_MS = 2000
+const MAX_POLICY_RETRIES = 20
+
 /**
  * @typedef OperationInputs
  * @type {object}
@@ -55,6 +63,7 @@ const ShakaError = shaka.util.Error
  * @property {number} cumulativeBackOffTimeMs
  * @property {number} cumulativeBackOffRequested
  * @property {number} cumulativeRetryDueToNextRequestPolicy
+ * @property {() => import('googlevideo/protos').BufferedRange[]} getBufferedRanges
  */
 /**
  * @typedef SabrStreamState
@@ -98,20 +107,56 @@ function formatIdFromString(str) {
  * @param {shaka.extern.BufferedRange} buffered
  * @param {shaka.media.SegmentIndex} segmentIndex
  */
-function createBufferedRange(formatId, buffered, segmentIndex) {
-  let endSegmentIndex = segmentIndex.find(buffered.end)
-  if (endSegmentIndex == null) {
-    // Using Last end time will get `null` in `segmentIndex.find`
-    endSegmentIndex = segmentIndex.getNumReferences() - 1
+export function createBufferedRange(formatId, buffered, segmentIndex) {
+  // The server reads startSegmentIndex/endSegmentIndex as sequence numbers, which are 1-based
+  // (segment position + 1, see the segment index parsers), and won't send a segment it is told is buffered.
+  // Only report segments that are completely inside the buffered range: MSE buffered ranges rarely end exactly
+  // on a segment boundary, and claiming the partially buffered segment shaka-player is about to request
+  // makes the server answer with policy-only responses until the retry limit forces a player reload.
+  let startPosition = segmentIndex.find(buffered.start)
+  if (startPosition == null) return null
+
+  const startReference = segmentIndex.get(startPosition)
+  if (startReference && startReference.startTime < buffered.start - BUFFERED_RANGE_TOLERANCE_SECONDS) {
+    startPosition++
   }
+
+  let endPosition = segmentIndex.find(buffered.end)
+  if (endPosition == null) {
+    // The buffered range reaches the end of the last segment
+    endPosition = segmentIndex.getNumReferences() - 1
+  } else {
+    const endReference = segmentIndex.get(endPosition)
+    if (endReference && endReference.endTime > buffered.end + BUFFERED_RANGE_TOLERANCE_SECONDS) {
+      endPosition--
+    }
+  }
+
+  const firstReference = segmentIndex.get(startPosition)
+  const lastReference = segmentIndex.get(endPosition)
+  if (endPosition < startPosition || !firstReference || !lastReference) return null
 
   return {
     formatId,
-    startTimeMs: String(Math.round(buffered.start * 1000)),
-    durationMs: String(Math.round((buffered.end - buffered.start) * 1000)),
-    startSegmentIndex: segmentIndex.find(buffered.start),
-    endSegmentIndex: endSegmentIndex,
+    startTimeMs: String(Math.round(firstReference.startTime * 1000)),
+    durationMs: String(Math.round((lastReference.endTime - firstReference.startTime) * 1000)),
+    startSegmentIndex: startPosition + 1,
+    endSegmentIndex: endPosition + 1,
   }
+}
+
+/**
+ * Removes the requested segment from the buffered ranges, so the server is never told the client already has it.
+ * @param {import('googlevideo/protos').BufferedRange[]} bufferedRanges
+ * @param {number} itag
+ * @param {number} sequenceNumber
+ * @returns {import('googlevideo/protos').BufferedRange[]}
+ */
+export function excludeRequestedSegment(bufferedRanges, itag, sequenceNumber) {
+  return bufferedRanges.filter((range) => {
+    return range.formatId?.itag !== itag ||
+      !(range.startSegmentIndex <= sequenceNumber && sequenceNumber <= range.endSegmentIndex)
+  })
 }
 
 /**
@@ -167,7 +212,8 @@ function fillBufferedRanges(player, manifest, audioFormatsActive, streamIsVideo,
       bufferedRanges.push(createFullBufferRange(audioFormatId))
     } else {
       for (const buffered of bufferedInfo.audio) {
-        bufferedRanges.push(createBufferedRange(audioFormatId, buffered, audioSegmentIndex))
+        const range = createBufferedRange(audioFormatId, buffered, audioSegmentIndex)
+        if (range) bufferedRanges.push(range)
       }
     }
 
@@ -188,7 +234,8 @@ function fillBufferedRanges(player, manifest, audioFormatsActive, streamIsVideo,
           videoSegmentIndex = activeManifestVariant.video.segmentIndex
         }
 
-        bufferedRanges.push(createBufferedRange(videoFormatId, buffered, videoSegmentIndex))
+        const range = createBufferedRange(videoFormatId, buffered, videoSegmentIndex)
+        if (range) bufferedRanges.push(range)
       }
     }
   }
@@ -279,6 +326,46 @@ function createTimeoutController(callback, timeoutMs) {
 }
 
 /**
+ * Development-only: one console line per SABR response, so retry loops can be diagnosed.
+ * Filter the DevTools console by "[SABR]".
+ * @param {OperationInputs} operationInputs
+ * @param {CurrentState} currentState
+ * @param {Response | undefined} response
+ * @param {string[]} parts
+ * @param {boolean} segmentComplete
+ * @param {boolean} shouldRetry
+ */
+function logSabrResponse(operationInputs, currentState, response, parts, segmentComplete, shouldRetry) {
+  const clientState = currentState.abrRequest.clientAbrState
+  const ranges = currentState.abrRequest.bufferedRanges
+    .map(range => `${range.formatId?.itag}:${range.startSegmentIndex}-${range.endSegmentIndex}`)
+    .join(',')
+  const outcome = segmentComplete ? 'complete' : (shouldRetry ? `retry #${currentState.cumulativeRetryDueToNextRequestPolicy + 1}` : 'no data')
+
+  // eslint-disable-next-line no-console -- development-only diagnostics
+  console.debug(
+    `[SABR] want ${operationInputs.formatIdString} ${operationInputs.isInit ? 'init' : `sq=${operationInputs.sequenceNumber}`}` +
+    ` playerTimeMs=${clientState.playerTimeMs} buffered=[${ranges}]` +
+    ` -> HTTP ${response?.status} [${parts.join(' ')}] => ${outcome}`
+  )
+}
+
+/**
+ * Delay before the next request when the previous responses only carried a next request policy without media.
+ * The server's own backoff time is honoured separately.
+ * @param {CurrentState} currentState
+ * @returns {number}
+ */
+export function getPolicyRetryDelayMs(currentState) {
+  const retries = currentState.cumulativeRetryDueToNextRequestPolicy
+  if (retries <= IMMEDIATE_POLICY_RETRIES || (currentState.sabrStreamState.nextRequestPolicy?.backoffTimeMs || 0) > 0) {
+    return 0
+  }
+
+  return Math.min(100 * 2 ** (retries - IMMEDIATE_POLICY_RETRIES - 1), MAX_POLICY_RETRY_DELAY_MS)
+}
+
+/**
  * @param {OperationInputs} operationInputs - readonly
  * @param {CurrentState} currentState - can be updated
  */
@@ -297,6 +384,9 @@ async function doRequest(
 
   let invalidPoToken = false
   let error
+
+  // Development-only diagnostics for SABR retry loops, see logSabrResponse
+  const debugParts = process.env.NODE_ENV === 'development' ? [] : null
 
   if (currentState.sabrStreamState.playerReloadRequested) {
     // Multiple requests might be issued at the same time, other requests should abort themselves once reload requested
@@ -326,13 +416,27 @@ async function doRequest(
         shouldReloadDueToBackoffLoop = true
       }
     }
-    if (shouldReloadDueToBackoffLoop || currentState.cumulativeRetryDueToNextRequestPolicy >= 100) {
+    if (shouldReloadDueToBackoffLoop || currentState.cumulativeRetryDueToNextRequestPolicy >= MAX_POLICY_RETRIES) {
       // Fire fake reload event due to detecting retry loop
       currentState.sabrStreamState.playerReloadRequested = true
       if (!currentState.abortController.signal.aborted) {
         currentState.abortController.abort()
         currentState.eventEmitter.emit('reload')
       }
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[SABR] giving up on ${operationInputs.formatIdString} sq=${operationInputs.sequenceNumber}: ${shouldReloadDueToBackoffLoop ? 'backoff loop' : `${MAX_POLICY_RETRIES} policy-only retries`}, requesting reload`)
+      }
+      // Don't send another request once the reload has been requested
+      throw createRecoverableNetworkError(ShakaError.Code.OPERATION_ABORTED, operationInputs.uri, operationInputs.requestType)
+    }
+
+    const policyRetryDelayMs = getPolicyRetryDelayMs(currentState)
+    if (policyRetryDelayMs > 0) {
+      // Repeated policy-only responses: don't hammer the server, which can end the session with HTTP 403
+      await new Promise((resolve, reject) => {
+        setTimeout(resolve, policyRetryDelayMs)
+        currentState.abortController.signal.addEventListener('abort', reject)
+      })
     }
 
     const sabrURL = new URL(currentState.sabrStreamState.sabrUrl)
@@ -363,6 +467,7 @@ async function doRequest(
             if (streamProtectionStatus.status === 3) {
               invalidPoToken = true
             }
+            debugParts?.push(`protection=${streamProtectionStatus.status}`)
             break
           }
           case UMPPartId.SABR_ERROR: {
@@ -370,6 +475,7 @@ async function doRequest(
             if (!sabrError) break
 
             error = `SABR Error: type: ${sabrError.type}, code: ${sabrError.code}`
+            debugParts?.push(error)
             break
           }
           case UMPPartId.SABR_REDIRECT: {
@@ -378,9 +484,16 @@ async function doRequest(
 
             currentState.sabrStreamState.sabrUrl = sabrRedirect.url
             shouldRetry = true
+            debugParts?.push('redirect')
             break
           }
           case UMPPartId.MEDIA_HEADER: {
+            if (debugParts) {
+              const header = decodePart(part, MediaHeader)
+              if (header) {
+                debugParts.push(`media(itag=${header.formatId?.itag} ${header.isInitSeg ? 'init' : `sq=${header.sequenceNumber}`} startMs=${header.startMs})`)
+              }
+            }
             if (mediaHeaderId === undefined) {
               const mediaHeader = decodePart(part, MediaHeader)
               if (!mediaHeader) break
@@ -424,6 +537,7 @@ async function doRequest(
             currentState.abrRequest.streamerContext.playbackCookie = nextRequestPolicy?.playbackCookie ? PlaybackCookie.encode(nextRequestPolicy.playbackCookie).finish() : undefined
 
             currentState.abrRequest.streamerContext.backoffTimeMs = nextRequestPolicy?.backoffTimeMs
+            debugParts?.push(`policy(backoffMs=${nextRequestPolicy?.backoffTimeMs ?? 0} targetAudioReadaheadMs=${nextRequestPolicy?.targetAudioReadaheadMs ?? '-'} targetVideoReadaheadMs=${nextRequestPolicy?.targetVideoReadaheadMs ?? '-'})`)
             break
           }
           case UMPPartId.FORMAT_INITIALIZATION_METADATA: {
@@ -477,6 +591,7 @@ async function doRequest(
             if (!reloadPlaybackContext) break
 
             // Whole video cannot be played
+            debugParts?.push('RELOAD_PLAYER_RESPONSE')
             currentState.sabrStreamState.playerReloadRequested = true
             if (!currentState.abortController.signal.aborted) {
               currentState.abortController.abort()
@@ -516,6 +631,10 @@ async function doRequest(
     throw createRecoverableNetworkError(ShakaError.Code.TIMEOUT, operationInputs.uri, operationInputs.requestType)
   }
 
+  if (debugParts) {
+    logSabrResponse(operationInputs, currentState, response, debugParts, segmentComplete, shouldRetry)
+  }
+
   if (responseDataChunks.length > 0 && segmentComplete) {
     const data = /** @__NOINLINE__ */ concatenateChunks(responseDataChunks)
 
@@ -533,6 +652,18 @@ async function doRequest(
       fromCache: false,
       originalRequest: operationInputs.request,
     }
+  } else if (invalidPoToken) {
+    // Stream protection status 3 (attestation required): the server won't send media with this PO token,
+    // however long it is asked to back off. Reload right away to get a new token.
+    currentState.sabrStreamState.playerReloadRequested = true
+    if (!currentState.abortController.signal.aborted) {
+      currentState.abortController.abort()
+      currentState.eventEmitter.emit('reload')
+    }
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[SABR] PO token rejected (attestation required) for ${operationInputs.formatIdString} sq=${operationInputs.sequenceNumber}, requesting reload`)
+    }
+    throw createRecoverableNetworkError(ShakaError.Code.OPERATION_ABORTED, operationInputs.uri, operationInputs.requestType)
   } else if (shouldRetry) {
     if (shouldRetryDueToNextRequestPolicy) {
       // Only count on actual retry to avoid counting false positive (when segmentComplete
@@ -541,6 +672,8 @@ async function doRequest(
 
     const { sabrContexts, unsentSabrContexts } = prepareSabrContexts(currentState.sabrStreamState)
 
+    // The buffer may have changed since the first request (e.g. shaka-player clearing it after a seek)
+    currentState.abrRequest.bufferedRanges = currentState.getBufferedRanges()
     currentState.abrRequest.streamerContext.sabrContexts = sabrContexts
     currentState.abrRequest.streamerContext.unsentSabrContexts = unsentSabrContexts
 
@@ -567,15 +700,6 @@ async function doRequest(
 
     currentState.abortStatus.finished = false
     return doRequest(operationInputs, currentState)
-  } else if (invalidPoToken) {
-    throw new ShakaError(
-      ShakaError.Severity.CRITICAL,
-      ShakaError.Category.NETWORK,
-      ShakaError.Code.HTTP_ERROR,
-      operationInputs.uri,
-      new Error('Invalid PO token'),
-      operationInputs.requestType,
-    )
   } else if (error) {
     throw createRecoverableNetworkError(
       ShakaError.Code.HTTP_ERROR,
@@ -704,12 +828,26 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
       }
     }
 
-    /** @type {import('googlevideo/protos').BufferedRange[]} */
-    const bufferedRanges = []
+    const sequenceNumber = parseInt(url.searchParams.get('sq'))
+    const requestedItag = formatIdFromString(formatIdString).itag
 
-    if (!isInit && activeVariant) {
-      /** @__NOINLINE__ */ fillBufferedRanges(player, getManifest(), isAudioOnly, streamIsVideo, streamIsAudio, bufferedRanges, activeVariant)
+    /** @type {import('googlevideo/protos').BufferedRange[]} */
+    let bufferedRanges = []
+
+    const getBufferedRanges = () => {
+      const currentPlayer = getPlayer()
+      if (isInit || currentPlayer == null) return bufferedRanges
+
+      const currentVariant = currentPlayer.getVariantTracks().find(track => track.active)
+      if (!currentVariant) return bufferedRanges
+
+      /** @type {import('googlevideo/protos').BufferedRange[]} */
+      const ranges = []
+      /** @__NOINLINE__ */ fillBufferedRanges(currentPlayer, getManifest(), isAudioOnly, streamIsVideo, streamIsAudio, ranges, currentVariant)
+      return excludeRequestedSegment(ranges, requestedItag, sequenceNumber)
     }
+
+    bufferedRanges = getBufferedRanges()
 
     let playerTimeMs = '0'
 
@@ -764,8 +902,6 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
       console.error('Invalid VideoPlaybackAbrRequest data', requestData)
       throw error
     }
-
-    const sequenceNumber = parseInt(url.searchParams.get('sq'))
 
     /**
      * Stores whatever state that should be updated across the whole "session"
@@ -831,6 +967,7 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
       cumulativeBackOffTimeMs: 0,
       cumulativeBackOffRequested: 0,
       cumulativeRetryDueToNextRequestPolicy: 0,
+      getBufferedRanges,
     }
 
     const pendingRequest = doRequest(opInputs, currentState)

@@ -41,7 +41,7 @@ import {
   mapInvidiousLegacyFormat,
   youtubeImageUrlToInvidious
 } from '../../helpers/api/invidious'
-import { sortCaptions } from '../../helpers/player/utils'
+import { registerSabrReload, sortCaptions } from '../../helpers/player/utils'
 import { MANIFEST_TYPE_SABR } from '../../helpers/player/SabrManifestParser'
 import { useI18n } from 'vue-i18n'
 
@@ -101,6 +101,8 @@ export default defineComponent({
   },
   data: function () {
     return {
+      /** @type {{ videoId: string, count: number, lastReloadAt: number } | null} */
+      sabrReloadState: null,
       startNextVideoInFullscreen: false,
       startNextVideoInFullwindow: false,
       startNextVideoInPip: false,
@@ -1989,7 +1991,17 @@ export default defineComponent({
     }, 1000),
 
     async onSabrReloadRequested() {
-      showToast('Reloading player according to SABR request')
+      // Each reload fetches a new PO token, which sometimes recovers playback. If YouTube keeps rejecting
+      // the tokens, stop instead of reloading again (see registerSabrReload).
+      const { allowed, state } = registerSabrReload(this.sabrReloadState, this.videoId, Date.now())
+      this.sabrReloadState = state
+
+      if (!allowed) {
+        showToast(this.t('Video.Player.SABR reload limit reached'), 10000)
+        return
+      }
+
+      showToast(this.t('Video.Player.Reloading player at YouTube request'))
       await this.saveWatchProgressForReload()
       await this.reloadView()
     },

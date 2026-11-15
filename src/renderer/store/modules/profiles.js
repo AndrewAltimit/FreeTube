@@ -309,7 +309,9 @@ const mutations = {
       return profile._id === profileId
     })
 
-    state.profileList.splice(i, 1)
+    if (i !== -1) {
+      state.profileList.splice(i, 1)
+    }
   }
 }
 

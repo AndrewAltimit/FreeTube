@@ -1847,7 +1847,7 @@ export function parseLocalListVideo(item, channelId, channelName) {
       videoId: movie.id,
       title: movie.title.text?.trim(),
       author: movie.author.name !== 'N/A' ? movie.author.name : channelName,
-      authorId: movie.author.id !== 'N/A' ? movie.author.id : channelId,
+      authorId: (movie.author.id != null && movie.author.id !== 'N/A') ? movie.author.id : channelId,
       description: movie.description_snippet?.text,
       lengthSeconds: isNaN(movie.duration.seconds) ? '' : movie.duration.seconds,
       liveNow: false,
@@ -1898,9 +1898,10 @@ export function parseLocalListVideo(item, channelId, channelName) {
       type: 'video',
       videoId: movie.id,
       title: movie.title.text,
-      author: movie.author.name !== 'N/A' ? movie.author.name : channelName,
-      authorId: movie.author.id !== 'N/A' ? movie.author.id : channelId,
-      lengthSeconds: isNaN(movie.duration.seconds) ? '' : movie.duration.seconds,
+      // youtubei.js' GridMovie node has no author and its duration is a Text
+      author: (movie.author?.name != null && movie.author.name !== 'N/A') ? movie.author.name : channelName,
+      authorId: (movie.author?.id != null && movie.author.id !== 'N/A') ? movie.author.id : channelId,
+      lengthSeconds: movie.duration?.text ? Utils.timeToSeconds(movie.duration.text) : '',
       isUpcoming: movie.is_upcoming,
       premiereDate: movie.upcoming
     }
@@ -1945,7 +1946,7 @@ export function parseLocalListVideo(item, channelId, channelName) {
       videoId: video.video_id,
       title: video.title.text?.trim(),
       author: video.author.name !== 'N/A' ? video.author.name : channelName,
-      authorId: video.author.id !== 'N/A' ? video.author.id : channelId,
+      authorId: (video.author.id != null && video.author.id !== 'N/A') ? video.author.id : channelId,
       collaborators: parseLocalCollaborators(video.author.collaborators),
       description: video.description,
       viewCount,

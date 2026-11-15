@@ -199,7 +199,7 @@ const actions = {
       ['%S', date.getSeconds().toString().padStart(2, '0')], // second 2 digits
       ['%T', date.getMilliseconds().toString().padStart(3, '0')], // millisecond 3 digits
       ['%s', parseInt(playerTime)], // video position second n digits
-      ['%t', (playerTime % 1).toString().slice(2, 5) || '000'], // video position millisecond 3 digits
+      ['%t', (playerTime % 1).toString().slice(2, 5).padEnd(3, '0')], // video position millisecond 3 digits
       ['%i', videoId] // video id
     ]
 

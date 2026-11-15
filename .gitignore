@@ -30,3 +30,6 @@ debug/
 lefthook-local.yml
 
 locale-errors.json
+
+# NeDB files a test run could create in the repo root
+/*.db

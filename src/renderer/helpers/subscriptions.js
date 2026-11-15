@@ -19,10 +19,11 @@ export function updateVideoListAfterProcessing(videos) {
         // viewCount is our only method of detecting premieres in RSS
         // data without sending an additional request.
         // If we ever get a better flag, use it here instead.
-        return item.viewCount !== '0'
+        // parseYouTubeRSSFeed stores a number; the string check is kept as a fallback
+        return item.viewCount !== 0 && item.viewCount !== '0'
       }
       // Observed for premieres in Local API Subscriptions.
-      return (item.premiereDate == null ||
+      return (item.premiereDate == null &&
         // Invidious API
         // `premiereTimestamp` only available on premiered videos
         // https://docs.invidious.io/api/common_types/#videoobject

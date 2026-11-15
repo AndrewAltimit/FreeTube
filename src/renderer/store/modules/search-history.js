@@ -65,7 +65,7 @@ const actions = {
     try {
       // sort before sending saving to the database and passing to other windows
       // so that the other windows can use it as is, without having to sort the array themselves
-      historyItems.sort((a, b) => b.timeWatched - a.timeWatched)
+      historyItems.sort((a, b) => b.lastUpdatedAt - a.lastUpdatedAt)
 
       await DBSearchHistoryHandlers.overwrite(historyItems)
       commit('setSearchHistoryEntries', historyItems)

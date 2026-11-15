@@ -1,3 +1,5 @@
+// Must stay the first import, see the file for why
+import './devUserData.js'
 import {
   app, BrowserWindow, dialog, Menu, ipcMain,
   powerSaveBlocker, screen, session, shell,
