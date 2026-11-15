@@ -27,7 +27,7 @@ Resolve conflicts on the sync branch, run `pnpm install`, then the gate (`pnpm r
 
 ## CI
 
-[`ci.yml`](../.github/workflows/ci.yml) runs the gate (`pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`) on the self-hosted runner for every pull request and push to `main`; run it locally too before pushing. The lefthook pre-commit hook covers only the lint part, on staged files. Releases and the Pages site are covered in [`ci-and-releases.md`](ci-and-releases.md). Upstream workflows the fork has not rebuilt stay parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md).
+[`ci.yml`](../.github/workflows/ci.yml) runs the gate (`pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`) on the self-hosted runner for every pull request and push to `main`; run it locally too before pushing. The lefthook pre-commit hook covers only the lint part, on staged files. Releases are covered in [`ci-and-releases.md`](ci-and-releases.md). Upstream workflows the fork has not rebuilt stay parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md).
 
 ## Commits and PRs
 

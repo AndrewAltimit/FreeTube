@@ -11,4 +11,4 @@ A new page gets a row here, not in the root [`CLAUDE.md`](../CLAUDE.md).
 | [`localization.md`](localization.md) | Where strings live, what lint enforces, how translations arrive from upstream's Weblate. |
 | [`testing.md`](testing.md) | The Vitest suite: layout, how the config mirrors the webpack build, conventions for mocks, fixtures and known-bug tests. |
 | [`fork-workflow.md`](fork-workflow.md) | Branches, syncing from upstream, commit conventions. |
-| [`ci-and-releases.md`](ci-and-releases.md) | The GitHub Actions workflows: the CI gate, the tagged release pipeline, the Pages site, the self-hosted runner. |
+| [`ci-and-releases.md`](ci-and-releases.md) | The GitHub Actions workflows: the CI gate, the tagged release pipeline, the self-hosted runner, the parked Pages site. |

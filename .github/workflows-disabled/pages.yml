@@ -7,6 +7,10 @@
 # `gh workflow run`, since a release made with GITHUB_TOKEN fires no
 # `release` event). Pull requests that touch the site build it without
 # deploying. See docs/ci-and-releases.md.
+#
+# Parked: the fork does not publish a Pages site. To bring it back, move this
+# file to .github/workflows/ and restore the `gh workflow run pages.yml` step
+# at the end of release.yml's publish job (which needs `actions: write`).
 
 name: Pages
 

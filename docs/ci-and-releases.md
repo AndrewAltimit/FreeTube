@@ -1,12 +1,11 @@
 # CI and releases
 
-The fork's GitHub Actions: the gate on every pull request and push to `main`, the tagged release pipeline, and the GitHub Pages site. Upstream's workflows that these replace are gone from [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md); the rest stay parked there.
+The fork's GitHub Actions: the gate on every pull request and push to `main`, and the tagged release pipeline. Upstream's workflows that these replace are gone from [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md); the rest stay parked there, along with the fork's own Pages workflow.
 
 | Workflow | Runs on | Does |
 |---|---|---|
 | [`ci.yml`](../.github/workflows/ci.yml) | PRs, pushes to `main` | `lint`, `test`, `pack`, `pack:web` |
 | [`release.yml`](../.github/workflows/release.yml) | `v*` tag pushes, manual dispatch | Gate, six platform builds, one GitHub release |
-| [`pages.yml`](../.github/workflows/pages.yml) | `site/` changes, manual dispatch, after each release | Builds `site/` and deploys it to GitHub Pages |
 
 ## The runner
 
@@ -47,7 +46,7 @@ A **dry run** builds everything without publishing: Actions > Release > Run work
 | `build-linux` | self-hosted (arm64) | `linux-x64`, `linux-arm64` |
 | `build-windows` | GitHub-hosted `windows-latest` | `win-x64`, `win-arm64` |
 | `build-macos` | GitHub-hosted `macos-latest` | `mac-x64`, `mac-arm64` |
-| `publish` | self-hosted | `SHA256SUMS`, the release, a site redeploy |
+| `publish` | self-hosted | `SHA256SUMS`, the release |
 
 Each build job is a matrix over `x64` and `arm64`, and each leg uploads its own workflow artifact (`freetube-linux-x64`, `freetube-win-arm64` and so on), never one combined bundle. `publish` waits for `verify` and every build leg, checks that every OS/architecture pair produced every package listed below, writes `SHA256SUMS`, and makes the single release edit with the runner's `gh`. A release therefore never appears with a platform missing or ahead of the gate. The hosted builds start alongside `verify` instead of after it, since nothing is published until it passes.
 
@@ -69,7 +68,9 @@ File names come from `artifactName` in [`_scripts/ebuilder.config.mjs`](../_scri
 
 macOS builds are ad-hoc signed (`identity: '-'` in the builder config), not notarised; Gatekeeper asks the user to confirm the first launch. Nothing is code-signed on Windows.
 
-## GitHub Pages site
+## GitHub Pages site (parked)
+
+The fork does not publish a Pages site. The workflow that would deploy it, `pages.yml`, is parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md), and `release.yml` does not trigger it. The site's source stays in the repo and is still tested, so it can be switched back on by moving `pages.yml` into `.github/workflows/` and adding back a last `publish` step that runs `gh workflow run pages.yml --ref main` (with `actions: write` on that job).
 
 The site's source is [`site/`](../site/): `index.html` (a template), `style.css`, and `build.mjs`, which writes the finished site to `site/dist/` (gitignored). `build.mjs` takes the JSON from `GET /repos/{owner}/{repo}/releases`, picks the newest published release (falling back to a pre-release when there is no full release), and renders its assets into the download table. The page makes no API calls of its own; every download link is plain HTML. Its one script highlights the visitor's OS card from the browser's platform string.
 
@@ -80,8 +81,6 @@ gh api repos/AndrewAltimit/FreeTube/releases > releases.json
 node site/build.mjs releases.json      # without the argument: the no-release page
 ```
 
-`pages.yml` deploys on pushes to `main` that touch `site/`, on manual dispatch, and after every published release. A release made with `GITHUB_TOKEN` fires no `release` event for other workflows, so `release.yml`'s last step starts `pages.yml` with `gh workflow run`; `workflow_dispatch` is the one event that token can trigger. Pull requests touching `site/` build it without deploying.
-
-The repository's Pages source must be set to **GitHub Actions** (Settings > Pages) for the deploy job to work.
+When enabled, `pages.yml` deploys on pushes to `main` that touch `site/`, on manual dispatch, and when started by a release. A release made with `GITHUB_TOKEN` fires no `release` event for other workflows, which is why the release has to start it with `gh workflow run`; `workflow_dispatch` is the one event that token can trigger. The repository's Pages source must be set to **GitHub Actions** (Settings > Pages).
 
 The asset-name pattern `build.mjs` parses is tested against the builder config's `artifactName` patterns in `tests/unit/site/build.test.js`, so renaming packages in one place without the other fails the suite.
