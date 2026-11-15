@@ -1,0 +1,70 @@
+---
+# The fork's gate, on the self-hosted runner (arm64 Linux, the same box as
+# the maintainer's other projects). It runs the same four commands the root
+# CLAUDE.md names as the gate before a commit lands on main:
+#
+#   pnpm run lint      ESLint + Stylelint
+#   pnpm test          Vitest unit tests
+#   pnpm run pack      every Electron webpack target
+#   pnpm run pack:web  the browser build
+#
+# Pull requests cancel their previous run on a new push; pushes to main keep
+# one group per commit and never cancel. Tags are not handled here:
+# release.yml owns the `v*` event and re-runs this gate as its own `verify`
+# job, so a release does not queue a duplicate run on the single runner.
+# See docs/ci-and-releases.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Lint, test, pack
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          package-manager-cache: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Pack Electron targets
+        run: pnpm run pack
+
+      - name: Pack web build
+        run: pnpm run pack:web

@@ -10,4 +10,5 @@ A new page gets a row here, not in the root [`CLAUDE.md`](../CLAUDE.md).
 | [`state-and-persistence.md`](state-and-persistence.md) | Vuex modules, the NeDB databases, the electron / web handler split, cross-window sync. |
 | [`localization.md`](localization.md) | Where strings live, what lint enforces, how translations arrive from upstream's Weblate. |
 | [`testing.md`](testing.md) | The Vitest suite: layout, how the config mirrors the webpack build, conventions for mocks, fixtures and known-bug tests. |
-| [`fork-workflow.md`](fork-workflow.md) | Branches, syncing from upstream, CI status, commit conventions. |
+| [`fork-workflow.md`](fork-workflow.md) | Branches, syncing from upstream, commit conventions. |
+| [`ci-and-releases.md`](ci-and-releases.md) | The GitHub Actions workflows: the CI gate, the tagged release pipeline, the Pages site, the self-hosted runner. |

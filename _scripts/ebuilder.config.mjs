@@ -7,6 +7,11 @@ export default {
   // asar: false,
   // compression: 'store',
   productName: packageDetails.productName,
+  // Every file names its OS and architecture, so one release can carry all
+  // six builds without collisions (electron-builder drops the arch for x64 by
+  // default, and the Linux and Windows zips would otherwise share a name).
+  // eslint-disable-next-line no-template-curly-in-string -- electron-builder macros, not JS
+  artifactName: '${name}-${version}-${os}-${arch}.${ext}',
   directories: {
     output: './build/',
   },
@@ -134,7 +139,13 @@ export default {
     icon: '_icons/icon.ico',
     target: ['nsis', 'zip', '7z', 'portable'],
   },
+  portable: {
+    // eslint-disable-next-line no-template-curly-in-string -- electron-builder macros, not JS
+    artifactName: '${name}-${version}-${os}-${arch}-portable.${ext}',
+  },
   nsis: {
+    // eslint-disable-next-line no-template-curly-in-string -- electron-builder macros, not JS
+    artifactName: '${name}-${version}-${os}-${arch}-setup.${ext}',
     allowToChangeInstallationDirectory: true,
     oneClick: false,
   },

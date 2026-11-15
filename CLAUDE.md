@@ -28,7 +28,9 @@ A single-maintainer fork of [FreeTubeApp/FreeTube](https://github.com/FreeTubeAp
 | [`_scripts/`](_scripts/) | Webpack configs per target, the dev runner, electron-builder config, locale and instance tooling. |
 | [`tests/`](tests/) | Vitest unit tests mirroring `src/`; config in `vitest.config.mjs` ([`docs/testing.md`](docs/testing.md)). |
 | [`docs/`](docs/README.md) | This fork's technical reference. Index at [`docs/README.md`](docs/README.md); writing rules in [`docs/CLAUDE.md`](docs/CLAUDE.md). |
-| [`.github/workflows-disabled/`](.github/workflows-disabled/README.md) | Upstream's CI, parked until it is rebuilt for the self-hosted runner. |
+| [`.github/workflows/`](.github/workflows/) | CI gate, tagged releases and the Pages deploy, on the self-hosted arm64 runner ([`docs/ci-and-releases.md`](docs/ci-and-releases.md)). |
+| [`site/`](site/) | The GitHub Pages site; `build.mjs` renders the download table from the latest release. |
+| [`.github/workflows-disabled/`](.github/workflows-disabled/README.md) | Upstream workflows the fork has not rebuilt, parked. |
 
 User-facing documentation (install, FAQ, usage) is upstream's at [docs.freetubeapp.io](https://docs.freetubeapp.io/); this repo's `docs/` covers how the code works and how the fork is run.
 
@@ -47,7 +49,7 @@ pnpm run checkforbadtemplates  # Vue templates referencing missing components
 pnpm run build               # pack all webpack targets + electron-builder for this platform
 ```
 
-Upstream never had a test suite; this fork added one on Vitest ([`docs/testing.md`](docs/testing.md)). The gate before a commit lands on `main` is `pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`: lint, unit tests, then compiling every target including the web build. Tests don't run in CI yet. Unit tests don't cover the Electron main process or real YouTube responses, so changes there still need the app run by hand; the [`verify` skill](.claude/skills/verify/SKILL.md) covers how.
+Upstream never had a test suite; this fork added one on Vitest ([`docs/testing.md`](docs/testing.md)). The gate before a commit lands on `main` is `pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`: lint, unit tests, then compiling every target including the web build. [`ci.yml`](.github/workflows/ci.yml) runs the same gate on every PR and push to `main`. Unit tests don't cover the Electron main process or real YouTube responses, so changes there still need the app run by hand; the [`verify` skill](.claude/skills/verify/SKILL.md) covers how.
 
 ## Conventions
 

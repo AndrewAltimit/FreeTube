@@ -292,6 +292,11 @@ const DARK_BASE_THEMES = [
   'solarizedDark',
 ]
 
+// The fork ships the OLED black theme as the default (upstream: 'system').
+// Main reads it too, so a fresh profile's window background and native theme
+// match the renderer before any setting is saved.
+const DEFAULT_BASE_THEME = 'black'
+
 const UI_SCALE = {
   MIN: 50,
   MAX: 300,
@@ -314,5 +319,6 @@ export {
   ABOUT_BITCOIN_ADDRESS,
   LIGHT_BASE_THEMES,
   DARK_BASE_THEMES,
+  DEFAULT_BASE_THEME,
   UI_SCALE,
 }
