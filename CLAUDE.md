@@ -26,6 +26,7 @@ A single-maintainer fork of [FreeTubeApp/FreeTube](https://github.com/FreeTubeAp
 | [`src/constants.js`](src/constants.js) | IPC channel names, DB actions, sync events, shared enums. |
 | [`static/locales/`](static/locales/) | UI strings. `en-US.yaml` is the only one edited by hand ([`docs/localization.md`](docs/localization.md)). |
 | [`_scripts/`](_scripts/) | Webpack configs per target, the dev runner, electron-builder config, locale and instance tooling. |
+| [`tests/`](tests/) | Vitest unit tests mirroring `src/`; config in `vitest.config.mjs` ([`docs/testing.md`](docs/testing.md)). |
 | [`docs/`](docs/README.md) | This fork's technical reference. Index at [`docs/README.md`](docs/README.md); writing rules in [`docs/CLAUDE.md`](docs/CLAUDE.md). |
 | [`.github/workflows-disabled/`](.github/workflows-disabled/README.md) | Upstream's CI, parked until it is rebuilt for the self-hosted runner. |
 
@@ -41,16 +42,17 @@ pnpm run debug               # dev with --remote-debug (attach from VS Code)
 pnpm run lint                # ESLint + Stylelint; the gate before every commit
 pnpm run lint-fix            # auto-fix what it can
 pnpm run lint-all            # lint + locale JSON/YAML
+pnpm test                    # Vitest unit tests (tests/); test:watch, test:coverage
 pnpm run checkforbadtemplates  # Vue templates referencing missing components
 pnpm run build               # pack all webpack targets + electron-builder for this platform
 ```
 
-There is **no automated test suite**; upstream never had one. Upstream's CI gate was `pnpm run lint && pnpm run pack && pnpm run pack:web` (lint, then compile every target, including the web build), and that is the gate here before a commit lands on `main`. Beyond it, verification means running the app; the [`verify` skill](.claude/skills/verify/SKILL.md) covers how.
+Upstream never had a test suite; this fork added one on Vitest ([`docs/testing.md`](docs/testing.md)). The gate before a commit lands on `main` is `pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`: lint, unit tests, then compiling every target including the web build. Tests don't run in CI yet. Unit tests don't cover the Electron main process or real YouTube responses, so changes there still need the app run by hand; the [`verify` skill](.claude/skills/verify/SKILL.md) covers how.
 
 ## Conventions
 
 - **Branches:** work on a feature branch off `main`, merge into `main`. There is no `development` branch in this fork's workflow ([`docs/fork-workflow.md`](docs/fork-workflow.md)).
-- **Lint and pack are the gate.** `pnpm run lint`, `pnpm run pack` and `pnpm run pack:web` must pass. The lefthook pre-commit hook runs ESLint and Stylelint on staged files only; don't bypass it, and don't treat it as the whole gate.
+- **Lint, tests and pack are the gate.** `pnpm run lint`, `pnpm test`, `pnpm run pack` and `pnpm run pack:web` must pass. A bug fix comes with a test that fails without it, where the code is reachable from a unit test. The lefthook pre-commit hook runs ESLint and Stylelint on staged files only; don't bypass it, and don't treat it as the whole gate.
 - **Every user-visible string goes through i18n.** `vue-i18n/no-raw-text` and `no-dynamic-keys` are lint errors. Add keys to `static/locales/en-US.yaml` only.
 - **Both APIs, both builds.** A data-path change has to work with the Local API (`youtubei.js`) and Invidious, and must not break the web build. Guard Electron-only code with `process.env.IS_ELECTRON` and Local-API-only code with `process.env.SUPPORTS_LOCAL_API` ([`docs/architecture.md`](docs/architecture.md#build-targets-and-flags)).
 - **New settings follow the settings-module recipe.** The comment block at the top of [`src/renderer/store/modules/settings.js`](src/renderer/store/modules/settings.js) is authoritative; read it before adding one.

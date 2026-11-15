@@ -1,16 +1,17 @@
 ---
 name: verify
-description: How to verify a change in this repo - lint gates, running the Electron and web builds, and what to check by hand since there is no test suite.
+description: How to verify a change in this repo - lint, the Vitest suite, compiling every target, and what to check by hand in the running app.
 ---
 
 # Verifying changes in FreeTube
 
-There is no automated test suite (upstream never had one). Upstream's CI gate was lint plus compiling every webpack target; this skill reproduces that, then has you run the app through the path the change touches.
+Verification is the gates below (lint, unit tests, compiling every webpack target), then running the app through the path the change touches. Unit tests cover helpers, store modules, datastores, API normalizers and parsers ([`docs/testing.md`](../../../docs/testing.md)); they don't cover the main process or live YouTube responses.
 
 ## 1. Gates (always)
 
 ```bash
 pnpm run lint                   # ESLint + Stylelint; must pass
+pnpm test                       # Vitest; must pass (a bug fix adds a test that fails without it)
 pnpm run pack                   # compiles main, preload, renderer, botGuard; catches broken imports
 pnpm run pack:web               # compiles the web build; catches Electron-only code leaking into it
 pnpm run lint-all               # also lints locale YAML/JSON; run when static/locales/ changed

@@ -9,4 +9,5 @@ A new page gets a row here, not in the root [`CLAUDE.md`](../CLAUDE.md).
 | [`architecture.md`](architecture.md) | The three Electron processes, the build targets and their compile-time flags, how IPC is wired, the two extractor APIs. |
 | [`state-and-persistence.md`](state-and-persistence.md) | Vuex modules, the NeDB databases, the electron / web handler split, cross-window sync. |
 | [`localization.md`](localization.md) | Where strings live, what lint enforces, how translations arrive from upstream's Weblate. |
+| [`testing.md`](testing.md) | The Vitest suite: layout, how the config mirrors the webpack build, conventions for mocks, fixtures and known-bug tests. |
 | [`fork-workflow.md`](fork-workflow.md) | Branches, syncing from upstream, CI status, commit conventions. |

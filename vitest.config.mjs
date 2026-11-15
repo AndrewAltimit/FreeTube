@@ -60,6 +60,8 @@ export default defineConfig({
       // web handlers; tests that touch the store mock
       // src/datastores/handlers/index.js instead of hitting NeDB.
       { find: /^DB_HANDLERS_ELECTRON_RENDERER_OR_WEB$/, replacement: r('./src/datastores/handlers/web.js') },
+      // Only exists inside Electron; see the stub for what it provides.
+      { find: /^electron\/renderer$/, replacement: r('./tests/stubs/electron-renderer.js') },
       { find: /^youtubei\.js$/, replacement: 'youtubei.js/web' },
       { find: /^shaka-player$/, replacement: 'shaka-player/dist/shaka-player.ui-es2021.js' },
       { find: /^@fortawesome\/fontawesome-svg-core$/, replacement: r('./src/renderer/fontawesome-minimal.js') },
@@ -70,6 +72,9 @@ export default defineConfig({
     include: ['tests/**/*.test.{js,mjs}'],
     environment: 'happy-dom',
     setupFiles: ['tests/setup.js'],
+    // Vitest 5's restoreMocks only restores vi.spyOn spies; mockReset also
+    // clears mockReturnValue / mockRejectedValue set on vi.fn between tests.
+    mockReset: true,
     restoreMocks: true,
     clearMocks: true,
   },

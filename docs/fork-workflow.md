@@ -19,7 +19,7 @@ git switch -c sync/upstream-<short-desc> main
 git merge upstream/development
 ```
 
-Resolve conflicts on the sync branch, run `pnpm install`, then the gate (`pnpm run lint && pnpm run pack && pnpm run pack:web`), smoke-test the app, then merge the sync branch into `main`.
+Resolve conflicts on the sync branch, run `pnpm install`, then the gate (`pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`), smoke-test the app, then merge the sync branch into `main`.
 
 - **Merge, don't rebase.** `main` is shared history; a merge keeps upstream's commits intact and makes the next sync's merge base obvious.
 - **When upstream fixes a bug this fork already fixed,** prefer upstream's version in the conflict and drop the fork's, unless the fork's fix is clearly better. Fewer divergent lines mean cheaper future syncs.
@@ -27,7 +27,7 @@ Resolve conflicts on the sync branch, run `pnpm install`, then the gate (`pnpm r
 
 ## CI
 
-All of upstream's workflows are parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md) and nothing runs. CI is being rebuilt for the maintainer's self-hosted runner. Until then, the gate is upstream's CI run by hand: `pnpm run lint && pnpm run pack && pnpm run pack:web`. The lefthook pre-commit hook covers only the lint part, on staged files.
+All of upstream's workflows are parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md) and nothing runs. CI is being rebuilt for the maintainer's self-hosted runner. Until then, the gate is run by hand: `pnpm run lint && pnpm test && pnpm run pack && pnpm run pack:web`. The lefthook pre-commit hook covers only the lint part, on staged files.
 
 ## Commits and PRs
 
