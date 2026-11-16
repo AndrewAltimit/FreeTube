@@ -52,21 +52,23 @@ Each build job is a matrix over `x64` and `arm64`, and each leg uploads its own 
 
 ### Why Windows and macOS build on hosted runners
 
-electron-builder ships arm64-hosted builds of fpm, the AppImage tools and 7-Zip, so both Linux architectures package on the arm64 runner. The x64 Linux build is a cross-package: it downloads the x64 Electron and packs it, compiling nothing.
+electron-builder ships arm64-hosted builds of fpm and the AppImage tools, so both Linux architectures package on the arm64 runner. The x64 Linux build is a cross-package: it downloads the x64 Electron and packs it, compiling nothing.
 
 Windows and macOS cannot build on the runner the same way. A macOS build needs Apple's SDK, which cannot be put on a Linux machine. For Windows, the NSIS compiler (`makensis`) and the resource tooling electron-builder runs are not reliable on an arm64 Linux host. Both therefore build on GitHub-hosted runners, as upstream's builds do. Hosted minutes are free for a public repository.
 
 ### Packages
 
-File names come from `artifactName` in [`_scripts/ebuilder.config.mjs`](../_scripts/ebuilder.config.mjs): `freetube-<version>-<os>-<arch>.<ext>`, with `-setup` and `-portable` before `.exe` on Windows. electron-builder leaves the architecture out of x64 names by default, which would make the Linux and Windows zips collide in one release.
+File names come from `artifactName` in [`_scripts/ebuilder.config.mjs`](../_scripts/ebuilder.config.mjs): `freetube-<version>-<os>-<arch>.<ext>`, with `-setup` before `.exe` on Windows. electron-builder leaves the architecture out of x64 names by default, which would make the x64 and arm64 packages of one OS collide in one release.
 
-The AppImage, deb, rpm and pacman targets substitute their distro's architecture spelling for `${arch}` (`x86_64`, `amd64`, `aarch64`) whatever the pattern says, so `build-linux` renames those files to the `x64`/`arm64` form after building. That step then checks the leg produced all six Linux packages, since `upload-artifact` only fails when no file at all matches.
+The AppImage, deb and rpm targets substitute their distro's architecture spelling for `${arch}` (`x86_64`, `amd64`, `aarch64`) whatever the pattern says, so `build-linux` renames those files to the `x64`/`arm64` form after building. That step then checks the leg produced all three Linux packages, since `upload-artifact` only fails when no file at all matches.
 
 | OS | Packages per architecture |
 |---|---|
-| Linux | `.AppImage`, `.deb`, `.rpm`, `.pacman`, `.zip`, `.7z` |
-| Windows | `-setup.exe` (NSIS), `-portable.exe`, `.zip`, `.7z` |
-| macOS | `.dmg`, `.zip`, `.7z` |
+| Linux | `.AppImage`, `.deb`, `.rpm` |
+| Windows | `-setup.exe` (NSIS) |
+| macOS | `.dmg` |
+
+The fork builds one package per format people install from. Upstream also builds portable, zip and 7z archives and an Arch `.pacman`. The fork leaves them out: they repeat the packages above (FreeTube has no auto-updater that would need the macOS zip), and they roughly tripled the size and upload time of a release.
 
 macOS builds are ad-hoc signed (`identity: '-'` in the builder config), not notarised; Gatekeeper asks the user to confirm the first launch. Nothing is code-signed on Windows.
 

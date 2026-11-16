@@ -77,8 +77,11 @@ export default async function (videoId, context, initialAttestationData, ytConfi
     globalObject: window
   })
 
+  // Like YouTube's web player (kevlar_base's WebPO minter), the snapshot for the integrity token takes an empty object
+  // as the content binding. Without it the integrity token is still issued, but SABR sessions using PO tokens minted
+  // from it stay "attestation pending" (stream protection status 2): about a minute of media, then nothing.
   const webPoSignalOutput = []
-  const botGuardResponse = await botGuard.snapshot({ webPoSignalOutput }, 10_000)
+  const botGuardResponse = await botGuard.snapshot({ contentBinding: {}, webPoSignalOutput }, 10_000)
 
   const integrityTokenResponse = await fetch(buildURL('GenerateIT', true), {
     method: 'POST',

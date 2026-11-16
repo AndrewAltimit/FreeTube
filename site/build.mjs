@@ -27,28 +27,20 @@ const PLATFORMS = [
 const ARCH_LABELS = { x64: 'x64 (Intel / AMD)', arm64: 'ARM64' }
 
 // Matches the artifactName patterns in _scripts/ebuilder.config.mjs.
-const ASSET_PATTERN = /-(linux|win|mac)-(x64|arm64)(-setup|-portable)?\.(\w+)$/
+const ASSET_PATTERN = /-(linux|win|mac)-(x64|arm64)(-setup)?\.(\w+)$/
 
 /** Display order and label of each package kind; the first is the recommended one. */
 const KINDS = {
   win: [
     { key: '-setup.exe', label: 'Installer (.exe)' },
-    { key: '-portable.exe', label: 'Portable (.exe)' },
-    { key: '.zip', label: '.zip' },
-    { key: '.7z', label: '.7z' },
   ],
   mac: [
     { key: '.dmg', label: 'Disk image (.dmg)' },
-    { key: '.zip', label: '.zip' },
-    { key: '.7z', label: '.7z' },
   ],
   linux: [
     { key: '.AppImage', label: 'AppImage' },
     { key: '.deb', label: 'Debian / Ubuntu (.deb)' },
     { key: '.rpm', label: 'Fedora / openSUSE (.rpm)' },
-    { key: '.pacman', label: 'Arch (.pacman)' },
-    { key: '.zip', label: '.zip' },
-    { key: '.7z', label: '.7z' },
   ],
 }
 

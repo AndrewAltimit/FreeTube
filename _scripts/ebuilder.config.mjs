@@ -57,7 +57,8 @@ export default {
   linux: {
     category: 'AudioVideo;Video;Player;Feed;Network',
     icon: '_icons/icon.svg',
-    target: ['deb', 'zip', '7z', 'rpm', 'AppImage', 'pacman'], // 'flatpak'],
+    // The fork ships one package per format people install from; upstream also builds zip, 7z and pacman
+    target: ['deb', 'rpm', 'AppImage'], // 'flatpak'],
   },
   // See the following issues for more information
   // https://github.com/jordansissel/fpm/issues/1503
@@ -111,7 +112,7 @@ export default {
   mac: {
     category: 'public.app-category.utilities',
     icon: '_icons/iconMac.icns',
-    target: ['dmg', 'zip', '7z'],
+    target: ['dmg'],
     type: 'distribution',
     extendInfo: {
       CFBundleURLTypes: [
@@ -137,11 +138,7 @@ export default {
   },
   win: {
     icon: '_icons/icon.ico',
-    target: ['nsis', 'zip', '7z', 'portable'],
-  },
-  portable: {
-    // eslint-disable-next-line no-template-curly-in-string -- electron-builder macros, not JS
-    artifactName: '${name}-${version}-${os}-${arch}-portable.${ext}',
+    target: ['nsis'],
   },
   nsis: {
     // eslint-disable-next-line no-template-curly-in-string -- electron-builder macros, not JS
