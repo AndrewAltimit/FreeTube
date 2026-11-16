@@ -1,12 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import shaka from 'shaka-player'
 
 import {
   createBufferedRange,
   excludeRequestedSegment,
   getPolicyRetryDelayMs,
-  refreshPoTokenIfRejected,
-  waitForReplacementPoToken,
 } from '../../../../src/renderer/helpers/player/SabrSchemePlugin.js'
 
 const formatId = { itag: 251, lastModified: '1700000000', xtags: undefined }
@@ -98,60 +96,5 @@ describe('getPolicyRetryDelayMs', () => {
 
   it('leaves waiting to the server backoff when one is given', () => {
     expect(getPolicyRetryDelayMs(state(10, 500))).toBe(0)
-  })
-})
-
-describe('PO token refresh', () => {
-  // base64 'AQID' is [1, 2, 3], 'BAUG' is [4, 5, 6]
-  function tokenState(refreshPoToken) {
-    const poToken = new Uint8Array([9])
-    return {
-      sentPoToken: poToken,
-      sabrStreamState: { poToken, refreshPoToken, poTokenRefresh: null, poTokenRefreshes: 0 },
-    }
-  }
-
-  it('replaces a token the server has not accepted', async () => {
-    const state = tokenState(vi.fn(async () => 'AQID'))
-
-    expect(await waitForReplacementPoToken(state)).toBe(true)
-    expect([...state.sabrStreamState.poToken]).toEqual([1, 2, 3])
-    expect(state.sabrStreamState.refreshPoToken).toHaveBeenCalledTimes(1)
-  })
-
-  it('mints only one replacement for concurrent requests carrying the same token', async () => {
-    const refresh = vi.fn(async () => 'AQID')
-    const video = tokenState(refresh)
-    const audio = { sentPoToken: video.sentPoToken, sabrStreamState: video.sabrStreamState }
-
-    refreshPoTokenIfRejected(video)
-    refreshPoTokenIfRejected(audio)
-    await video.sabrStreamState.poTokenRefresh
-
-    // A late response graded against the old token must not trigger another refresh
-    refreshPoTokenIfRejected(audio)
-
-    expect(refresh).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops after three replacements so a session that is never accepted falls back to a reload', async () => {
-    const tokens = ['AQID', 'BAUG', 'AQID']
-    const state = tokenState(vi.fn(async () => tokens.shift()))
-
-    for (let i = 0; i < 3; i++) {
-      expect(await waitForReplacementPoToken(state)).toBe(true)
-      state.sentPoToken = state.sabrStreamState.poToken
-    }
-
-    expect(await waitForReplacementPoToken(state)).toBe(false)
-    expect(state.sabrStreamState.refreshPoToken).toHaveBeenCalledTimes(3)
-  })
-
-  it('reports no replacement when minting fails or is unavailable', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const failing = tokenState(vi.fn(async () => { throw new Error('BotGuard failed') }))
-
-    expect(await waitForReplacementPoToken(failing)).toBe(false)
-    expect(await waitForReplacementPoToken(tokenState(undefined))).toBe(false)
   })
 })

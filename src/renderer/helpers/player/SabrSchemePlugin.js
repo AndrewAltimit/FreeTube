@@ -29,9 +29,6 @@ const IMMEDIATE_POLICY_RETRIES = 2
 const MAX_POLICY_RETRY_DELAY_MS = 2000
 const MAX_POLICY_RETRIES = 20
 
-// How many times a streaming session may replace a PO token YouTube hasn't accepted before falling back to a player reload
-const MAX_PO_TOKEN_REFRESHES = 3
-
 /**
  * @typedef OperationInputs
  * @type {object}
@@ -67,7 +64,6 @@ const MAX_PO_TOKEN_REFRESHES = 3
  * @property {number} cumulativeBackOffRequested
  * @property {number} cumulativeRetryDueToNextRequestPolicy
  * @property {() => import('googlevideo/protos').BufferedRange[]} getBufferedRanges
- * @property {Uint8Array} sentPoToken - the PO token the latest request for this segment carried
  */
 /**
  * @typedef SabrStreamState
@@ -78,10 +74,6 @@ const MAX_PO_TOKEN_REFRESHES = 3
  * @property {?NextRequestPolicy} nextRequestPolicy
  * @property {boolean} playerReloadRequested
  * @property {number} requestNumber
- * @property {Uint8Array} poToken - the PO token new requests carry, replaced by {@linkcode refreshPoTokenIfRejected}
- * @property {(() => Promise<string>) | undefined} refreshPoToken - mints a new base64 PO token
- * @property {?Promise<void>} poTokenRefresh - the refresh in progress, if any
- * @property {number} poTokenRefreshes
  */
 /**
  * @typedef TimeoutController
@@ -374,61 +366,6 @@ export function getPolicyRetryDelayMs(currentState) {
 }
 
 /**
- * Starts minting a replacement PO token when the server says it hasn't accepted the one this request carried.
- *
- * Every response grades the token in STREAM_PROTECTION_STATUS: 1 accepted, 2 attestation pending, 3 attestation
- * required. A pending session is still served roughly the first minute of the video, then (or straight away after
- * seeking past it) gets status 3 and no media. Replacing the token as soon as it is graded pending usually lands
- * the new one before it is needed, without a player reload. Whether YouTube accepts a new token is hit and miss,
- * so a session gets at most {@linkcode MAX_PO_TOKEN_REFRESHES} replacements.
- * @param {CurrentState} currentState
- */
-export function refreshPoTokenIfRejected(currentState) {
-  const state = currentState.sabrStreamState
-
-  if (
-    !state.refreshPoToken || state.poTokenRefresh || state.poTokenRefreshes >= MAX_PO_TOKEN_REFRESHES ||
-    // Already replaced since this request was sent, the new token hasn't been graded yet
-    currentState.sentPoToken !== state.poToken
-  ) {
-    return
-  }
-
-  state.poTokenRefreshes++
-
-  if (process.env.NODE_ENV === 'development') {
-    console.warn(`[SABR] PO token not accepted, minting a new one (${state.poTokenRefreshes}/${MAX_PO_TOKEN_REFRESHES})`)
-  }
-
-  state.poTokenRefresh = state.refreshPoToken()
-    .then((token) => {
-      state.poToken = base64ToU8(token)
-    })
-    .catch((error) => {
-      console.error('SABR: minting a replacement PO token failed', error)
-    })
-    .finally(() => {
-      state.poTokenRefresh = null
-    })
-}
-
-/**
- * Waits for a replacement PO token after the server refused the current one (stream protection status 3).
- * @param {CurrentState} currentState
- * @returns {Promise<boolean>} whether there is a newer token than the one this request carried
- */
-export async function waitForReplacementPoToken(currentState) {
-  refreshPoTokenIfRejected(currentState)
-
-  const refresh = currentState.sabrStreamState.poTokenRefresh
-  if (refresh) {
-    await refresh
-  }
-
-  return currentState.sabrStreamState.poToken !== currentState.sentPoToken
-}
-
-/**
  * @param {OperationInputs} operationInputs - readonly
  * @param {CurrentState} currentState - can be updated
  */
@@ -527,9 +464,6 @@ async function doRequest(
             const streamProtectionStatus = decodePart(part, StreamProtectionStatus)
             if (!streamProtectionStatus) break
 
-            if (streamProtectionStatus.status === 2 || streamProtectionStatus.status === 3) {
-              refreshPoTokenIfRejected(currentState)
-            }
             if (streamProtectionStatus.status === 3) {
               invalidPoToken = true
             }
@@ -718,9 +652,9 @@ async function doRequest(
       fromCache: false,
       originalRequest: operationInputs.request,
     }
-  } else if (invalidPoToken && !(await waitForReplacementPoToken(currentState))) {
+  } else if (invalidPoToken) {
     // Stream protection status 3 (attestation required): the server won't send media with this PO token,
-    // however long it is asked to back off, and no replacement could be minted. Reload to start a new session.
+    // however long it is asked to back off. Reload right away to get a new token.
     currentState.sabrStreamState.playerReloadRequested = true
     if (!currentState.abortController.signal.aborted) {
       currentState.abortController.abort()
@@ -730,8 +664,7 @@ async function doRequest(
       console.warn(`[SABR] PO token rejected (attestation required) for ${operationInputs.formatIdString} sq=${operationInputs.sequenceNumber}, requesting reload`)
     }
     throw createRecoverableNetworkError(ShakaError.Code.OPERATION_ABORTED, operationInputs.uri, operationInputs.requestType)
-  } else if (shouldRetry || invalidPoToken) {
-    // invalidPoToken here means a replacement token is ready, retry with it
+  } else if (shouldRetry) {
     if (shouldRetryDueToNextRequestPolicy) {
       // Only count on actual retry to avoid counting false positive (when segmentComplete
       currentState.cumulativeRetryDueToNextRequestPolicy += 1
@@ -741,8 +674,6 @@ async function doRequest(
 
     // The buffer may have changed since the first request (e.g. shaka-player clearing it after a seek)
     currentState.abrRequest.bufferedRanges = currentState.getBufferedRanges()
-    currentState.abrRequest.streamerContext.poToken = currentState.sabrStreamState.poToken
-    currentState.sentPoToken = currentState.sabrStreamState.poToken
     currentState.abrRequest.streamerContext.sabrContexts = sabrContexts
     currentState.abrRequest.streamerContext.unsentSabrContexts = unsentSabrContexts
 
@@ -828,6 +759,7 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
    */
   const initDataCache = new Map()
 
+  const poToken = base64ToU8(sabrData.poToken)
   const videoPlaybackUstreamerConfig = base64ToU8(sabrData.ustreamerConfig)
   const clientInfo = deepCopy(sabrData.clientInfo)
 
@@ -839,10 +771,6 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
     nextRequestPolicy: undefined,
     playerReloadRequested: false,
     requestNumber: 0,
-    poToken: base64ToU8(sabrData.poToken),
-    refreshPoToken: sabrData.refreshPoToken,
-    poTokenRefresh: null,
-    poTokenRefreshes: 0,
   }
 
   shaka.net.NetworkingEngine.registerScheme('sabr', (uri, request, requestType, _progressUpdated, headersReceived, _config) => {
@@ -956,7 +884,7 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
       selectedFormatIds: isInit ? [] : [audioFormatId, videoFormatId],
       bufferedRanges,
       streamerContext: {
-        poToken: sabrStreamState.poToken,
+        poToken,
         clientInfo,
         sabrContexts,
         unsentSabrContexts,
@@ -1040,7 +968,6 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
       cumulativeBackOffRequested: 0,
       cumulativeRetryDueToNextRequestPolicy: 0,
       getBufferedRanges,
-      sentPoToken: requestData.streamerContext.poToken,
     }
 
     const pendingRequest = doRequest(opInputs, currentState)

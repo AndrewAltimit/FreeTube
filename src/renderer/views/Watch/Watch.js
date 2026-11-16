@@ -27,7 +27,6 @@ import {
   showToast
 } from '../../helpers/utils'
 import {
-  generateContentPoToken,
   getLocalVideoInfo,
   mapLocalLegacyFormat,
   parseLocalSubscriberCount,
@@ -50,7 +49,6 @@ import { useI18n } from 'vue-i18n'
  * @typedef {{
  *   url: string,
  *   poToken: string,
- *   refreshPoToken: (() => Promise<string>) | undefined,
  *   ustreamerConfig: string,
  *   clientInfo: {
  *     clientName: number,
@@ -1672,13 +1670,9 @@ export default defineComponent({
       url.searchParams.set('alr', 'yes')
       url.searchParams.set('cpn', videoInfo.cpn)
 
-      const videoId = this.videoId
-
       this.sabrData = {
         url: url.toString(),
         poToken,
-        // Replaces a PO token YouTube doesn't accept, without reloading the player (see SabrSchemePlugin)
-        refreshPoToken: process.env.IS_ELECTRON ? () => generateContentPoToken(videoId) : undefined,
         ustreamerConfig: videoInfo.player_config.media_common_config.media_ustreamer_request_config.video_playback_ustreamer_config,
         clientInfo
       }
