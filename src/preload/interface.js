@@ -121,10 +121,21 @@ export default {
    * @param {string} context
    * @param {string} initialAttestationData
    * @param {string} ytConfig
-   * @returns {Promise<string>}
+   * @param {string} [cpn] - client playback nonce, to also create the playback attestation response
+   * @returns {Promise<{ poToken: string, attestationResponse: string | undefined }>}
    */
-  generatePoToken: (videoId, context, initialAttestationData, ytConfig) => {
-    return ipcRenderer.invoke(IpcChannels.GENERATE_PO_TOKEN, videoId, context, initialAttestationData, ytConfig)
+  generatePoToken: (videoId, context, initialAttestationData, ytConfig, cpn) => {
+    return ipcRenderer.invoke(IpcChannels.GENERATE_PO_TOKEN, videoId, context, initialAttestationData, ytConfig, cpn)
+  },
+
+  /**
+   * @param {string} url
+   * @param {Record<string, string>} headers
+   * @param {string} body
+   * @returns {Promise<number | null>} the HTTP status
+   */
+  sendPlaybackAttestation: (url, headers, body) => {
+    return ipcRenderer.invoke(IpcChannels.SEND_PLAYBACK_ATTESTATION, url, headers, body)
   },
 
   chooseDefaultFolder: () => {

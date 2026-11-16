@@ -882,3 +882,33 @@ describe('ShoppingTimelyShelfView parser', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 })
+
+describe('createPlaybackAttestation', () => {
+  const atrUrl = { baseUrl: 'https://s.youtube.com/api/stats/atr?ns=yt&ver=2&docid=abc&ei=E1&plid=P1&vm=VM&len=60&c=WEB', elapsedMediaTimeSeconds: 5 }
+  const session = { visitorData: 'VISITOR', clientVersion: '2.20261112.10.00', sessionToken: 'XSRF' }
+
+  it('posts the attestation like the web player: to www.youtube.com with the playback identifiers and visitor ID', () => {
+    const attestation = local.createPlaybackAttestation({ playbackTracking: { atrUrl } }, 'CPN123', 'a=6&c=1&r1a=RESPONSE', session)
+
+    const url = new URL(attestation.url)
+    expect(url.origin + url.pathname).toBe('https://www.youtube.com/api/stats/atr')
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      ns: 'yt', docid: 'abc', ei: 'E1', plid: 'P1', vm: 'VM', len: '60', c: 'WEB', el: 'detailpage', cpn: 'CPN123', cver: '2.20261112.10.00',
+    })
+    expect(attestation.headers).toEqual({
+      'X-YouTube-Client-Name': '1',
+      'X-YouTube-Client-Version': '2.20261112.10.00',
+      'X-Goog-Visitor-Id': 'VISITOR',
+    })
+
+    const body = new URLSearchParams(attestation.body)
+    expect(body.get('atr')).toBe('a=6&c=1&r1a=RESPONSE')
+    expect(body.get('session_token')).toBe('XSRF')
+  })
+
+  it('returns null without an attestation response or atr URL', () => {
+    expect(local.createPlaybackAttestation({ playbackTracking: { atrUrl } }, 'CPN', undefined, session)).toBeNull()
+    expect(local.createPlaybackAttestation({ playbackTracking: {} }, 'CPN', 'atr', session)).toBeNull()
+    expect(local.createPlaybackAttestation(undefined, 'CPN', 'atr', session)).toBeNull()
+  })
+})

@@ -31,7 +31,8 @@ import {
   mapLocalLegacyFormat,
   parseLocalSubscriberCount,
   parseLocalTextRuns,
-  parseLocalWatchNextVideo
+  parseLocalWatchNextVideo,
+  sendPlaybackAttestation
 } from '../../helpers/api/local'
 import {
   convertInvidiousToLocalFormat,
@@ -103,6 +104,8 @@ export default defineComponent({
     return {
       /** @type {{ videoId: string, count: number, lastReloadAt: number } | null} */
       sabrReloadState: null,
+      /** @type {{ url: string, headers: Record<string, string>, body: string } | null} */
+      playbackAttestation: null,
       startNextVideoInFullscreen: false,
       startNextVideoInFullwindow: false,
       startNextVideoInPip: false,
@@ -421,6 +424,7 @@ export default defineComponent({
       this.manifestSrc = null
       this.manifestMimeType = MANIFEST_TYPE_DASH
       this.sabrData = null
+      this.playbackAttestation = null
       this.legacyFormats = []
       this.captions = []
       this.vrProjection = null
@@ -506,8 +510,9 @@ export default defineComponent({
 
       try {
         const videoInfo = await getLocalVideoInfo(this.videoId)
-        const { info: result, poToken, clientInfo, adEndTimeUnixMs, contentDisclosures } = videoInfo
+        const { info: result, poToken, playbackAttestation, clientInfo, adEndTimeUnixMs, contentDisclosures } = videoInfo
         this.contentDisclosures = contentDisclosures || null
+        this.playbackAttestation = playbackAttestation ?? null
 
         const playabilityStatus = result.playability_status
         this.playabilityStatus = playabilityStatus.status
@@ -1217,6 +1222,31 @@ export default defineComponent({
     },
 
     /**
+     * Sends the playback attestation once per playback, shortly after the player has loaded,
+     * like YouTube's web player (html5_player_att_initial_delay_ms). See createPlaybackAttestation.
+     */
+    sendPlaybackAttestationOnce: function () {
+      if (!process.env.SUPPORTS_LOCAL_API || !this.playbackAttestation) {
+        return
+      }
+
+      const playbackAttestation = this.playbackAttestation
+      this.playbackAttestation = null
+
+      setTimeout(() => {
+        sendPlaybackAttestation(playbackAttestation)
+          .then((status) => {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(`[SABR] playback attestation sent -> HTTP ${status}`)
+            }
+          })
+          .catch((error) => {
+            console.error('Sending the playback attestation failed', error)
+          })
+      }, 1000)
+    },
+
+    /**
      * @param {number} currentSeconds
      */
     updateCurrentChapter: function (currentSeconds) {
@@ -1322,6 +1352,8 @@ export default defineComponent({
     handleVideoLoaded: function () {
       // Only used one time = remove after use
       this.oneTimeTimestamp = null
+
+      this.sendPlaybackAttestationOnce()
 
       // will trigger again if you switch formats or change legacy quality
       // Check isUpcoming to avoid marking upcoming videos as watched if the user has only watched the trailer
