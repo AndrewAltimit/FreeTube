@@ -187,6 +187,11 @@ const props = defineProps({
     type: Object,
     default: null
   },
+  /** Refreshes the SABR stream in place when YouTube asks for a new player response, see setupSabrScheme */
+  sabrRefresh: {
+    type: Function,
+    default: null
+  },
   legacyFormats: {
     type: Array,
     default: () => ([])
@@ -1296,7 +1301,7 @@ let sabrStream
 let sabrAbortController
 
 if (process.env.SUPPORTS_LOCAL_API && props.sabrData) {
-  sabrStream = /** @__NOINLINE__ */ setupSabrScheme(props.sabrData, () => player, () => sabrManifest, playerWidth, playerHeight)
+  sabrStream = /** @__NOINLINE__ */ setupSabrScheme(props.sabrData, () => player, () => sabrManifest, playerWidth, playerHeight, props.sabrRefresh)
   sabrAbortController = new AbortController()
   // Since there can be 2 requests at the same time (video + audio), we debounce the listener to only show the message once
   sabrStream.onBackoffRequested(debounce(({ backoffMs }) => {

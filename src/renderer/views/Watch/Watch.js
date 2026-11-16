@@ -41,7 +41,7 @@ import {
   mapInvidiousLegacyFormat,
   youtubeImageUrlToInvidious
 } from '../../helpers/api/invidious'
-import { registerSabrReload, sortCaptions } from '../../helpers/player/utils'
+import { buildRefreshedSabrData, registerSabrReload, sortCaptions } from '../../helpers/player/utils'
 import { MANIFEST_TYPE_SABR } from '../../helpers/player/SabrManifestParser'
 import { useI18n } from 'vue-i18n'
 
@@ -147,6 +147,8 @@ export default defineComponent({
       manifestMimeType: MANIFEST_TYPE_DASH,
       /** @type {SabrData | null} */
       sabrData: null,
+      /** @type {{ itag: number, lastModified: string, xtags?: string }[]} formats in the SABR manifest */
+      sabrFormatIds: [],
       legacyFormats: [],
       captions: [],
       /** @type {import('youtubei.js').Misc.Format[]} */
@@ -421,6 +423,7 @@ export default defineComponent({
       this.manifestSrc = null
       this.manifestMimeType = MANIFEST_TYPE_DASH
       this.sabrData = null
+      this.sabrFormatIds = []
       this.legacyFormats = []
       this.captions = []
       this.vrProjection = null
@@ -1677,6 +1680,12 @@ export default defineComponent({
         clientInfo
       }
 
+      this.sabrFormatIds = videoInfo.streaming_data.adaptive_formats.map(format => ({
+        itag: format.itag,
+        lastModified: format.last_modified_ms,
+        xtags: format.xtags,
+      }))
+
       /** @type {import('../../helpers/player/SabrManifestParser').SabrManifest} */
       const sabrManifest = {
         // Different formats have different durations and
@@ -1999,6 +2008,41 @@ export default defineComponent({
     onManualReloadRequested: throttle(async function () {
       await this.reloadAtCurrentTimestamp()
     }, 1000),
+
+    /**
+     * Passed to the player: when YouTube asks for a new player response mid-playback, fetches one in the
+     * background so the stream carries on from its buffer. Returns null when that isn't possible, and the
+     * player then falls back to a full reload (onSabrReloadRequested).
+     * @param {string | undefined} reloadPlaybackToken
+     * @returns {Promise<SabrData | null>}
+     */
+    async refreshSabrData(reloadPlaybackToken) {
+      const videoId = this.videoId
+      const currentSabrData = this.sabrData
+      if (!currentSabrData) return null
+
+      // Shares its budget with full reloads: each one is a PO token and a player request (see registerSabrReload)
+      const { allowed, state } = registerSabrReload(this.sabrReloadState, videoId, Date.now())
+      this.sabrReloadState = state
+      if (!allowed) return null
+
+      const { info, poToken, clientInfo } = await getLocalVideoInfo(videoId, { reloadPlaybackToken })
+
+      // The user moved on while the refresh was loading
+      if (this.videoId !== videoId || this.sabrData !== currentSabrData) return null
+
+      return buildRefreshedSabrData(currentSabrData, this.sabrFormatIds, {
+        streamingUrl: info.streaming_data?.server_abr_streaming_url,
+        ustreamerConfig: info.player_config?.media_common_config?.media_ustreamer_request_config?.video_playback_ustreamer_config,
+        poToken,
+        clientInfo,
+        formats: (info.streaming_data?.adaptive_formats ?? []).map(format => ({
+          itag: format.itag,
+          lastModified: format.last_modified_ms,
+          xtags: format.xtags,
+        })),
+      })
+    },
 
     async onSabrReloadRequested() {
       // Each reload fetches a new PO token, which sometimes recovers playback. If YouTube keeps rejecting
