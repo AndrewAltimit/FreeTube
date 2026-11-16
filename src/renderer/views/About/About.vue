@@ -47,6 +47,7 @@ import FtLogoFull from '../../components/FtLogoFull/FtLogoFull.vue'
 import { vSaferHtml } from '../../directives/vSaferHtml.js'
 
 import { ABOUT_BITCOIN_ADDRESS } from '../../../constants'
+import { RELEASES_PAGE_URL, REPOSITORY_URL } from '../../helpers/updates.js'
 import packageDetails from '../../../../package.json'
 
 const { t } = useI18n()
@@ -58,7 +59,7 @@ const chunks = computed(() => [
     icon: ['fab', 'github'],
     title: t('About.Source code'),
     content: [
-      '<a href="https://github.com/FreeTubeApp/FreeTube" lang="en" dir="ltr">GitHub: FreeTubeApp/FreeTube</a>',
+      `<a href="${REPOSITORY_URL}" lang="en" dir="ltr">GitHub: AndrewAltimit/FreeTube</a>`,
       t('About.Licensed under the {licenseLink}', {
         licenseLink: `<a href="https://www.gnu.org/licenses/agpl-3.0.en.html">${t('About.AGPLv3')}</a>`,
       }),
@@ -67,7 +68,7 @@ const chunks = computed(() => [
   {
     icon: ['fas', 'file-download'],
     title: t('About.Downloads / Changelog'),
-    content: `<a href="https://github.com/FreeTubeApp/FreeTube/releases">${t('About.GitHub releases')}</a>`,
+    content: `<a href="${RELEASES_PAGE_URL}">${t('About.GitHub releases')}</a>`,
   },
   {
     icon: ['fas', 'question-circle'],

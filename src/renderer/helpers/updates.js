@@ -1,7 +1,8 @@
 // The update check looks at this fork's releases, not upstream FreeTube's: the fork has its own version numbers,
 // so comparing against upstream would offer "updates" to a different app.
 export const RELEASES_API_URL = 'https://api.github.com/repos/AndrewAltimit/FreeTube/releases?per_page=1'
-export const RELEASES_PAGE_URL = 'https://github.com/AndrewAltimit/FreeTube/releases'
+export const REPOSITORY_URL = 'https://github.com/AndrewAltimit/FreeTube'
+export const RELEASES_PAGE_URL = `${REPOSITORY_URL}/releases`
 
 const VERSION_PATTERN = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/
 
