@@ -128,6 +128,7 @@ import store from './store/index'
 import packageDetails from '../../package.json'
 import { openExternalLink, openInternalPath, showToast } from './helpers/utils'
 import { translateWindowTitle } from './helpers/strings'
+import { isNewerVersion, RELEASES_API_URL, RELEASES_PAGE_URL } from './helpers/updates'
 import { loadLocale } from './i18n/index'
 import { getLocalClip } from './helpers/api/local.js'
 import { getClipInvidious } from './helpers/api/invidious.js'
@@ -256,6 +257,7 @@ const latestVersionNumber = ref('')
 const showReleaseNotes = ref(false)
 const changeLogTitle = ref('')
 const updateChangelog = ref('')
+const latestReleaseUrl = ref(RELEASES_PAGE_URL)
 
 /** @type {import('vue').ComputedRef<boolean>} */
 const checkForUpdates = computed(() => store.getters.getCheckForUpdates)
@@ -272,37 +274,30 @@ async function checkForNewUpdates() {
   }
 
   try {
-    const response = await fetch('https://api.github.com/repos/freetubeapp/freetube/releases?per_page=1')
+    const response = await fetch(RELEASES_API_URL)
     const json = await response.json()
 
-    const tagName = json[0].tag_name
-    const versionNumber = tagName.replace('v', '').replace('-beta', '')
+    const release = json[0]
+    if (!release || !isNewerVersion(packageDetails.version, release.tag_name)) {
+      return
+    }
 
-    let changelog = json[0].body
+    const changelog = (release.body ?? '')
       // Link usernames to their GitHub profiles
       .replaceAll(/@(\S+)\b/g, '[@$1](https://github.com/$1)')
       // Shorten pull request links to #1234
-      .replaceAll(/https:\/\/github\.com\/FreeTubeApp\/FreeTube\/pull\/(\d+)/g, '[#$1]($&)')
-
-    // Add the title
-    changelog = `${changelog}`
+      .replaceAll(/https:\/\/github\.com\/AndrewAltimit\/FreeTube\/pull\/(\d+)/g, '[#$1]($&)')
 
     updateChangelog.value = marked.parse(changelog)
-    changeLogTitle.value = json[0].name
-    latestVersionNumber.value = versionNumber
-
-    const appVersion = packageDetails.version.split('.')
-    const latestVersion = versionNumber.split('.')
-
-    if (parseInt(appVersion[0]) < parseInt(latestVersion[0])) {
-      showUpdatesBanner.value = true
-    } else if (parseInt(appVersion[1]) < parseInt(latestVersion[1])) {
-      showUpdatesBanner.value = true
-    } else if (parseInt(appVersion[2]) < parseInt(latestVersion[2]) && parseInt(appVersion[1]) <= parseInt(latestVersion[1])) {
-      showUpdatesBanner.value = true
+    changeLogTitle.value = release.name
+    latestVersionNumber.value = release.tag_name.replace(/^v/, '')
+    if (typeof release.html_url === 'string' && release.html_url.startsWith(`${RELEASES_PAGE_URL}/`)) {
+      latestReleaseUrl.value = release.html_url
     }
+
+    showUpdatesBanner.value = true
   } catch (error) {
-    console.error('errored while checking for updates', 'https://api.github.com/repos/freetubeapp/freetube/releases?per_page=1', error)
+    console.error('errored while checking for updates', RELEASES_API_URL, error)
   }
 }
 
@@ -322,7 +317,7 @@ function handleUpdateBannerClick(response) {
 }
 
 function openDownloadsPage() {
-  openExternalLink('https://freetubeapp.io#download')
+  openExternalLink(latestReleaseUrl.value)
   showReleaseNotes.value = false
   showUpdatesBanner.value = false
 }
