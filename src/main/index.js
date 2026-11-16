@@ -32,7 +32,7 @@ import contextMenu from 'electron-context-menu'
 
 import packageDetails from '../../package.json'
 import { handleOpenInExternalPlayer } from './externalPlayer'
-import { generatePoToken, getChromeIdentityHeaders, getYouTubeVisitorCookieHeader, setYouTubeVisitorCookies } from './poTokenGenerator'
+import { generatePoToken } from './poTokenGenerator'
 import { isFreeTubeUrl } from './utils'
 
 const brotliDecompressAsync = promisify(brotliDecompress)
@@ -640,9 +640,6 @@ function runApp() {
         requestHeaders.Referer = 'https://www.youtube.com/'
         requestHeaders.Origin = 'https://www.youtube.com'
 
-        // The streaming server checks the PO token against the browser identity it was minted under
-        Object.assign(requestHeaders, getChromeIdentityHeaders())
-
         // YouTube doesn't send the Content-Type header for the media requests, so we shouldn't either
         delete requestHeaders['Content-Type']
       } else if (urlObj.origin === 'https://ipwho.is') {
@@ -667,21 +664,12 @@ function runApp() {
         'https://www.youtube.com/iframe_api',
         'https://www.youtube.com/watch?*',
         'https://www.youtube.com/',
-        'https://www.youtube.com/api/stats/atr*',
       ]
     }
 
-    session.defaultSession.webRequest.onHeadersReceived(trackingCookieRequestFilter, ({ responseHeaders, url }, callback) => {
+    session.defaultSession.webRequest.onHeadersReceived(trackingCookieRequestFilter, ({ responseHeaders }, callback) => {
       if (responseHeaders) {
-        if (url.startsWith('https://www.youtube.com/watch?')) {
-          const setCookieHeaders = responseHeaders['set-cookie'] ?? responseHeaders['Set-Cookie']
-          if (setCookieHeaders) {
-            setYouTubeVisitorCookies(setCookieHeaders)
-          }
-        }
-
         delete responseHeaders['set-cookie']
-        delete responseHeaders['Set-Cookie']
         delete responseHeaders['content-security-policy']
         delete responseHeaders['cross-origin-opener-policy']
         delete responseHeaders['report-to']
@@ -1318,39 +1306,10 @@ function runApp() {
     })
   })
 
-  ipcMain.handle(IpcChannels.GENERATE_PO_TOKEN, (event, videoId, context, initialAttestationData, ytConfig, cpn) => {
+  ipcMain.handle(IpcChannels.GENERATE_PO_TOKEN, (event, videoId, context, initialAttestationData, ytConfig) => {
     if (isFreeTubeUrl(event.senderFrame.url)) {
-      return generatePoToken(videoId, context, initialAttestationData, ytConfig, typeof cpn === 'string' ? cpn : undefined, proxyUrl)
+      return generatePoToken(videoId, context, initialAttestationData, ytConfig, proxyUrl)
     }
-  })
-
-  ipcMain.handle(IpcChannels.SEND_PLAYBACK_ATTESTATION, async (event, url, headers, body) => {
-    if (!isFreeTubeUrl(event.senderFrame.url) || typeof url !== 'string' || typeof body !== 'string' ||
-      !url.startsWith('https://www.youtube.com/api/stats/atr?')) {
-      return null
-    }
-
-    // Only the headers YouTube's web player sends with it, see createPlaybackAttestation in helpers/api/local.js
-    const allowedHeaders = ['X-Goog-Visitor-Id', 'X-YouTube-Client-Name', 'X-YouTube-Client-Version']
-    const requestHeaders = Object.fromEntries(
-      Object.entries(headers ?? {}).filter(([name, value]) => allowedHeaders.includes(name) && typeof value === 'string')
-    )
-
-    const response = await net.fetch(url, {
-      method: 'POST',
-      body,
-      credentials: 'omit',
-      headers: {
-        ...requestHeaders,
-        ...getChromeIdentityHeaders(),
-        Cookie: getYouTubeVisitorCookieHeader(),
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Origin: 'https://www.youtube.com',
-        Referer: `https://www.youtube.com/watch?v=${new URL(url).searchParams.get('docid')}`,
-      },
-    })
-
-    return response.status
   })
 
   ipcMain.on(IpcChannels.ENABLE_PROXY, (event, url) => {

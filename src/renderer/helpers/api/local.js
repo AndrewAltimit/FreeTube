@@ -621,7 +621,6 @@ function createWatchNextRequestBody(videoId) {
  * @returns {Promise<{
  *   info: import('youtubei.js').YT.VideoInfo,
  *   poToken: string | undefined,
- *   playbackAttestation: ReturnType<typeof createPlaybackAttestation>,
  *   clientInfo: {
  *     clientName: number,
  *     clientVersion: string,
@@ -668,22 +667,17 @@ export async function getLocalVideoInfo(id) {
     htmlExtracts.playerId
   )
 
-  // Created before the PO token, as the playback attestation is bound to it
-  const cpn = Utils.generateRandomString(16)
-
   // based on the videoId
   let contentPoToken
-  let attestationResponse
 
   if (process.env.IS_ELECTRON) {
     try {
-      ({ poToken: contentPoToken, attestationResponse } = await window.ftElectron.generatePoToken(
+      contentPoToken = await window.ftElectron.generatePoToken(
         id,
         JSON.stringify(htmlExtracts.session.context),
         JSON.stringify(htmlExtracts.initialAttestationData),
-        JSON.stringify(htmlExtracts.ytConfig),
-        cpn
-      ))
+        JSON.stringify(htmlExtracts.ytConfig)
+      )
 
       player.po_token = contentPoToken
     } catch (error) {
@@ -745,6 +739,8 @@ export async function getLocalVideoInfo(id) {
 
     Object.assign(playerResponse.data, mwebPlayerResponse.data)
   }
+
+  const cpn = Utils.generateRandomString(16)
 
   const info = new YT.VideoInfo([playerResponse, nextResponse], htmlExtracts.session.actions, cpn)
 
@@ -863,85 +859,10 @@ export async function getLocalVideoInfo(id) {
   return {
     info,
     poToken: contentPoToken,
-    playbackAttestation: createPlaybackAttestation(playerResponse.data, cpn, attestationResponse, {
-      visitorData: context.client.visitorData,
-      clientVersion: context.client.clientVersion,
-      sessionToken: htmlExtracts.ytConfig?.XSRF_TOKEN,
-    }),
     clientInfo,
     adEndTimeUnixMs,
     contentDisclosures: extractLocalContentDisclosures(info),
   }
-}
-
-/**
- * The playback attestation YouTube's web player sends once a video starts playing (an "atr" stats ping): the BotGuard
- * attestation response, POSTed to `https://www.youtube.com/api/stats/atr` with the playback's identifiers from the
- * player response's `playbackTracking.atrUrl` and the session's visitor ID. Without it the SABR streaming session
- * stays "attestation pending" (stream protection status 2), and only the first minute or so of the video is served.
- * @param {object} rawPlayerResponse
- * @param {string} cpn
- * @param {string | undefined} attestationResponse
- * @param {{ visitorData: string | undefined, clientVersion: string, sessionToken: string | undefined }} session
- * @returns {{ url: string, headers: Record<string, string>, body: string } | null}
- */
-export function createPlaybackAttestation(rawPlayerResponse, cpn, attestationResponse, session) {
-  const atrUrl = rawPlayerResponse?.playbackTracking?.atrUrl
-  if (!attestationResponse || !atrUrl?.baseUrl) {
-    return null
-  }
-
-  let atrParams
-  try {
-    atrParams = new URL(atrUrl.baseUrl).searchParams
-  } catch {
-    return null
-  }
-
-  // The web player sends it to the current origin, not the atrUrl host, with these playback identifiers
-  const url = new URL('https://www.youtube.com/api/stats/atr')
-  for (const name of ['ns', 'docid', 'ei', 'plid', 'vm', 'len', 'c']) {
-    if (atrParams.has(name)) {
-      url.searchParams.set(name, atrParams.get(name))
-    }
-  }
-  url.searchParams.set('el', 'detailpage')
-  url.searchParams.set('cpn', cpn)
-  url.searchParams.set('ver', '2')
-  url.searchParams.set('cver', session.clientVersion)
-  url.searchParams.set('cplayer', 'UNIPLAYER')
-  url.searchParams.set('cplatform', 'DESKTOP')
-
-  /** @type {Record<string, string>} */
-  const headers = {
-    'X-YouTube-Client-Name': '1',
-    'X-YouTube-Client-Version': session.clientVersion,
-  }
-  if (session.visitorData) {
-    headers['X-Goog-Visitor-Id'] = session.visitorData
-  }
-
-  const body = new URLSearchParams({ atr: attestationResponse })
-  if (session.sessionToken) {
-    body.set('session_token', session.sessionToken)
-  }
-
-  return { url: url.toString(), headers, body: body.toString() }
-}
-
-/**
- * Sends the playback attestation, see {@linkcode createPlaybackAttestation}. It goes through the main process, as
- * the web player's headers aren't allowed on a cross-origin request from the renderer.
- * @param {{ url: string, headers: Record<string, string>, body: string }} playbackAttestation
- * @returns {Promise<number | null>} the HTTP status
- */
-export async function sendPlaybackAttestation({ url, headers, body }) {
-  if (!process.env.IS_ELECTRON) {
-    return null
-  }
-
-  // A plain copy, as IPC can't clone the reactive proxy Vue wraps the stored object in
-  return await window.ftElectron.sendPlaybackAttestation(url, { ...headers }, body)
 }
 
 /**

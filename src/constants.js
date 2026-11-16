@@ -44,7 +44,6 @@ const IpcChannels = {
   SET_INVIDIOUS_AUTHORIZATION: 'set-invidious-authorization',
 
   GENERATE_PO_TOKEN: 'generate-po-token',
-  SEND_PLAYBACK_ATTESTATION: 'send-playback-attestation',
 
   CHOOSE_DEFAULT_FOLDER: 'choose-default-folder',
   WRITE_TO_DEFAULT_FOLDER: 'write-to-default-folder',
