@@ -534,6 +534,27 @@ async function getWatchHTMLWatchPage(videoId, fetchFunc) {
 }
 
 /**
+ * Mints a new content-bound PO token for `videoId` from a freshly fetched page's attestation challenge.
+ * Used to replace a token YouTube hasn't accepted during a SABR streaming session (see SabrSchemePlugin).
+ * @param {string} videoId
+ * @returns {Promise<string>}
+ */
+export async function generateContentPoToken(videoId) {
+  if (!process.env.IS_ELECTRON) {
+    throw new Error('PO token generation is only available in Electron')
+  }
+
+  const htmlExtracts = await getWatchHTMLWatchPage(videoId, (input, init) => fetch(input, init))
+
+  return await window.ftElectron.generatePoToken(
+    videoId,
+    JSON.stringify(htmlExtracts.session.context),
+    JSON.stringify(htmlExtracts.initialAttestationData),
+    JSON.stringify(htmlExtracts.ytConfig)
+  )
+}
+
+/**
  * @param {object} ytConfig
  * @param {(input, init) => Promise<Response>} fetchFunc
  */
