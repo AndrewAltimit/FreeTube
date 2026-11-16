@@ -13,7 +13,7 @@
 #   publish         self-hosted     SHA256SUMS + the one release edit
 #
 # The self-hosted runner is arm64 Linux. electron-builder ships arm64-hosted
-# builds of fpm, the AppImage tools and 7-Zip, so both Linux architectures
+# builds of fpm and the AppImage tools, so both Linux architectures
 # package there (x64 is a cross-package: it only downloads the x64 Electron).
 # Windows and macOS build on GitHub-hosted runners, free for this public
 # repo: macOS needs Apple's SDK, and NSIS and the Windows resource tooling are
@@ -153,11 +153,11 @@ jobs:
       - name: Build
         run: pnpm run ${{ matrix.arch == 'arm64' && 'build:arm64' || 'build' }}
 
-      # The AppImage, deb, rpm and pacman targets spell ${arch} the way their
-      # distro does (x86_64, amd64, aarch64), whatever artifactName says.
-      # Rename them to the x64/arm64 names every other package uses, then
-      # check the leg produced all six, since upload-artifact only fails when
-      # nothing at all matches.
+      # The AppImage, deb and rpm targets spell ${arch} the way their distro
+      # does (x86_64, amd64, aarch64), whatever artifactName says. Rename them
+      # to the x64/arm64 names every other package uses, then check the leg
+      # produced all three, since upload-artifact only fails when nothing at
+      # all matches.
       - name: Normalise Linux package names
         working-directory: build
         env:
@@ -168,7 +168,7 @@ jobs:
             mv -v -- "$f" "$(sed -E "s/-linux-(x86_64|amd64|aarch64)\./-linux-${ARCH}./" <<<"$f")"
           done
           status=0
-          for ext in deb rpm pacman AppImage zip 7z; do
+          for ext in deb rpm AppImage; do
             if ! compgen -G "*-linux-${ARCH}.${ext}" >/dev/null; then
               echo "ERROR: no package matching *-linux-${ARCH}.${ext}" >&2
               status=1
@@ -185,10 +185,7 @@ jobs:
           path: |
             build/*-linux-${{ matrix.arch }}.deb
             build/*-linux-${{ matrix.arch }}.rpm
-            build/*-linux-${{ matrix.arch }}.pacman
             build/*-linux-${{ matrix.arch }}.AppImage
-            build/*-linux-${{ matrix.arch }}.zip
-            build/*-linux-${{ matrix.arch }}.7z
           if-no-files-found: error
           retention-days: 7
 
@@ -236,9 +233,6 @@ jobs:
           overwrite: true
           path: |
             build/*-win-${{ matrix.arch }}-setup.exe
-            build/*-win-${{ matrix.arch }}-portable.exe
-            build/*-win-${{ matrix.arch }}.zip
-            build/*-win-${{ matrix.arch }}.7z
           if-no-files-found: error
           retention-days: 7
 
@@ -285,8 +279,6 @@ jobs:
           overwrite: true
           path: |
             build/*-mac-${{ matrix.arch }}.dmg
-            build/*-mac-${{ matrix.arch }}.zip
-            build/*-mac-${{ matrix.arch }}.7z
           if-no-files-found: error
           retention-days: 7
 
@@ -325,9 +317,9 @@ jobs:
             fi
           }
           for arch in x64 arm64; do
-            for ext in deb rpm pacman AppImage zip 7z; do expect "linux-${arch}.${ext}"; done
-            for suffix in -setup.exe -portable.exe .zip .7z; do expect "win-${arch}${suffix}"; done
-            for ext in dmg zip 7z; do expect "mac-${arch}.${ext}"; done
+            for ext in deb rpm AppImage; do expect "linux-${arch}.${ext}"; done
+            expect "win-${arch}-setup.exe"
+            expect "mac-${arch}.dmg"
           done
           ls -la
           exit "${status}"

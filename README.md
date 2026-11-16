@@ -133,7 +133,7 @@ RedirectTube, doesn’t automatically open YouTube links in FreeTube (although t
 
 * [GitHub Releases](https://github.com/AndrewAltimit/FreeTube/releases)
 
-Each release has builds for x64 and arm64: Windows (installer, portable, zip and 7z), macOS (dmg, zip and 7z) and Linux (AppImage, deb, rpm, pacman, zip and 7z). To build from source instead, run `pnpm install && pnpm run build`.
+Each release has builds for x64 and arm64: a Windows installer (`-setup.exe`), a macOS disk image (`.dmg`), and for Linux an AppImage, a `.deb` and an `.rpm`. To build from source instead, run `pnpm install && pnpm run build`.
 
 ## Contributing
 This fork does not accept external contributions; see [CONTRIBUTING.md](CONTRIBUTING.md). Development happens on `main`, with feature branches off it.

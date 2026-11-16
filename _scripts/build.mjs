@@ -14,7 +14,7 @@ if (platform === 'darwin') {
     arch = Arch.arm64
   }
 
-  targets = Platform.MAC.createTarget(['DMG', 'zip', '7z'], arch)
+  targets = Platform.MAC.createTarget(['DMG'], arch)
 } else if (platform === 'win32') {
   let arch = Arch.x64
 
@@ -22,7 +22,7 @@ if (platform === 'darwin') {
     arch = Arch.arm64
   }
 
-  targets = Platform.WINDOWS.createTarget(['nsis', 'zip', '7z', 'portable'], arch)
+  targets = Platform.WINDOWS.createTarget(['nsis'], arch)
 } else if (platform === 'linux') {
   let arch = Arch.x64
 
@@ -30,7 +30,7 @@ if (platform === 'darwin') {
     arch = Arch.arm64
   }
 
-  targets = Platform.LINUX.createTarget(['deb', 'zip', '7z', 'rpm', 'AppImage', 'pacman'], arch)
+  targets = Platform.LINUX.createTarget(['deb', 'rpm', 'AppImage'], arch)
 }
 
 const output = await build({ targets, config, publish: 'never' })

@@ -16,38 +16,51 @@ describe('site/build.mjs', () => {
     it('recognises every package the release workflow publishes, under the builder config names', () => {
       const names = []
       for (const arch of ['x64', 'arm64']) {
-        for (const ext of ['deb', 'rpm', 'pacman', 'AppImage', 'zip', '7z']) {
+        for (const ext of ['deb', 'rpm', 'AppImage']) {
           names.push(expand(config.artifactName, 'linux', arch, ext))
         }
         names.push(
           expand(config.nsis.artifactName, 'win', arch, 'exe'),
-          expand(config.portable.artifactName, 'win', arch, 'exe'),
-          expand(config.artifactName, 'win', arch, 'zip'),
-          expand(config.artifactName, 'win', arch, '7z'),
+          expand(config.artifactName, 'mac', arch, 'dmg'),
         )
-        for (const ext of ['dmg', 'zip', '7z']) {
-          names.push(expand(config.artifactName, 'mac', arch, ext))
-        }
       }
 
       const groups = groupAssets(names.map((name) => asset(name)))
 
       for (const arch of ['x64', 'arm64']) {
-        expect(groups.linux[arch]).toHaveLength(6)
-        expect(groups.win[arch]).toHaveLength(4)
-        expect(groups.mac[arch]).toHaveLength(3)
+        expect(groups.linux[arch]).toHaveLength(3)
+        expect(groups.win[arch]).toHaveLength(1)
+        expect(groups.mac[arch]).toHaveLength(1)
       }
+    })
+
+    it('builds exactly the packages the release publishes', () => {
+      expect(config.linux.target).toEqual(['deb', 'rpm', 'AppImage'])
+      expect(config.win.target).toEqual(['nsis'])
+      expect(config.mac.target).toEqual(['dmg'])
     })
 
     it('orders each architecture with the recommended package first', () => {
       const groups = groupAssets([
-        asset('freetube-0.26.0-win-x64.zip'),
-        asset('freetube-0.26.0-win-x64-portable.exe'),
-        asset('freetube-0.26.0-win-x64-setup.exe'),
+        asset('freetube-0.26.0-linux-x64.rpm'),
+        asset('freetube-0.26.0-linux-x64.deb'),
+        asset('freetube-0.26.0-linux-x64.AppImage'),
       ])
 
-      expect(groups.win.x64.map((item) => item.label)).toEqual(['Installer (.exe)', 'Portable (.exe)', '.zip'])
-      expect(groups.win.x64.map((item) => item.recommended)).toEqual([true, false, false])
+      expect(groups.linux.x64.map((item) => item.label)).toEqual(['AppImage', 'Debian / Ubuntu (.deb)', 'Fedora / openSUSE (.rpm)'])
+      expect(groups.linux.x64.map((item) => item.recommended)).toEqual([true, false, false])
+    })
+
+    it('leaves out formats older releases had but the fork no longer builds', () => {
+      const groups = groupAssets([
+        asset('freetube-0.26.0-win-x64-setup.exe'),
+        asset('freetube-0.26.0-win-x64-portable.exe'),
+        asset('freetube-0.26.0-win-x64.zip'),
+        asset('freetube-0.26.0-linux-x64.pacman'),
+      ])
+
+      expect(groups.win.x64.map((item) => item.label)).toEqual(['Installer (.exe)'])
+      expect(groups.linux).toBeUndefined()
     })
 
     it('ignores checksums and files it does not know', () => {
