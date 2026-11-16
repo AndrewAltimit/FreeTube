@@ -9,7 +9,7 @@
 #   verify          self-hosted     the CI gate (lint, test, pack:web) + tag/version check
 #   build-linux     self-hosted     linux-x64, linux-arm64
 #   build-windows   windows-latest  win-x64, win-arm64
-#   build-macos     macos-latest    mac-x64 and mac-arm64, in one job
+#   build-macos     macos-15-intel  mac-x64 and mac-arm64, in one job
 #   publish         self-hosted     SHA256SUMS + the one release edit
 #
 # The self-hosted runner is arm64 Linux. electron-builder ships arm64-hosted
@@ -238,14 +238,15 @@ jobs:
 
   # -- macOS (GitHub-hosted) --------------------------------------------------
   # Ad-hoc signed by the builder config (identity '-'), not notarised.
-  # Both architectures build in one job, one after the other. macos-latest is
-  # an arm64 runner, and GitHub's arm64 macOS pool is often short of capacity:
-  # a job that waits too long is never given a runner and is cancelled, which
-  # fails the whole release. One job needs one runner from that pool instead
-  # of two, and building x64 on it is a cross-package that takes minutes.
+  # Not macos-latest: that is an arm64 runner, and GitHub's arm64 macOS pool
+  # is often short of capacity. A job that waits too long is never given a
+  # runner and is cancelled, which fails the whole release (it did, twice, for
+  # v1.0.0). The Intel image is a separate pool. Nothing here compiles native
+  # code, so the arm64 package is a cross-package, like x64 Linux on the
+  # arm64 runner. Both architectures build in one job, one after the other.
   build-macos:
     name: Build (mac)
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
       - name: Checkout
