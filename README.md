@@ -17,6 +17,38 @@ Available for Windows (10 and later), Mac (macOS 13 and later) & Linux thanks to
 >
 > The rest of this README is upstream's, adjusted where it conflicts with this fork.
 
+## How this fork differs from FreeTube
+
+### Playback reliability
+- **Videos keep playing past the first minute, and seeking works.** YouTube had started serving FreeTube only about a minute of each video and refusing to stream after a seek (upstream [#10024](https://github.com/FreeTubeApp/FreeTube/issues/10024)). The fork mints its proof-of-origin token the way YouTube's own web player does, and YouTube accepts it.
+- **Far fewer "Reloading player at YouTube request" interruptions:**
+  - The player tells YouTube accurately which segments it has buffered, so YouTube doesn't stall waiting on a segment it thinks the player already has.
+  - Requests that come back empty are retried with a growing delay instead of hundreds of times in a row.
+  - A reload loads the video once, not twice in parallel.
+- **Protection against IP blocks.** Automatic reloads are capped at two per video in five minutes. Bursts of reloads don't recover playback and can get your IP blocked (HTTP 403).
+
+### Subscriptions and data
+- **"Hide upcoming premieres" works** on both the built-in extractor and Invidious; it never filtered anything before.
+- **The subscription feed cache is no longer wiped** when profiles fail to load, and feeds no longer come back empty after a restart.
+- **Deleting several playlists at once deletes all of them**, not just one.
+- **Removing a profile that doesn't exist no longer deletes a different one.**
+- **Search history is ordered by last use**, as intended.
+
+### Smaller fixes
+- Storyboard previews (seek bar thumbnails) work on videos with long storyboard intervals.
+- Fixes for crashes on some video titles, channels without an owner, movie listings, audio-only streams and some channel tag lookups.
+- The `%t` screenshot file name placeholder is padded to three digits, as documented.
+
+### Different defaults
+- **Black (OLED) theme** instead of following the system theme, with no window flash on start-up.
+- **The header logo is hidden.**
+
+Both can be changed under Settings > Theme.
+
+### Releases and updates
+- **This fork has its own version numbers, starting at 1.0.0.** The update check looks at this fork's releases, not upstream's.
+- **Each release has builds** for Windows, macOS and Linux, on both x64 and arm64.
+
 <p align="center"><a href="https://github.com/AndrewAltimit/FreeTube/releases">Download</a></p>
 <p align="center">
   <a href="https://hosted.weblate.org/engage/free-tube/">
@@ -25,7 +57,7 @@ Available for Windows (10 and later), Mac (macOS 13 and later) & Linux thanks to
 </p>
 
 <hr>
-<p align="center"><a href="#screenshots">Screenshots</a> &bull; <a href="#how-does-it-work">How does it work?</a> &bull; <a href="#features">Features</a> &bull; <a href="#download-links">Download Links</a> &bull; <a href="#contributing">Contributing</a> &bull; <a href="#localization">Localization</a> &bull; <a href="#contact">Contact</a> &bull; <a href="#license">License</a></p>
+<p align="center"><a href="#how-this-fork-differs-from-freetube">Differences</a> &bull; <a href="#screenshots">Screenshots</a> &bull; <a href="#how-does-it-work">How does it work?</a> &bull; <a href="#features">Features</a> &bull; <a href="#download-links">Download Links</a> &bull; <a href="#contributing">Contributing</a> &bull; <a href="#localization">Localization</a> &bull; <a href="#contact">Contact</a> &bull; <a href="#license">License</a></p>
 <hr>
 
 ## Screenshots
@@ -101,7 +133,7 @@ RedirectTube, doesn’t automatically open YouTube links in FreeTube (although t
 
 * [GitHub Releases](https://github.com/AndrewAltimit/FreeTube/releases)
 
-There are no release builds yet; they will appear on the releases page once CI is rebuilt on a self-hosted runner. Until then, build from source with `pnpm install && pnpm run build`.
+Each release has builds for x64 and arm64: Windows (installer, portable, zip and 7z), macOS (dmg, zip and 7z) and Linux (AppImage, deb, rpm, pacman, zip and 7z). To build from source instead, run `pnpm install && pnpm run build`.
 
 ## Contributing
 This fork does not accept external contributions; see [CONTRIBUTING.md](CONTRIBUTING.md). Development happens on `main`, with feature branches off it.
