@@ -9,7 +9,7 @@
 #   verify          self-hosted     the CI gate (lint, test, pack:web) + tag/version check
 #   build-linux     self-hosted     linux-x64, linux-arm64
 #   build-windows   windows-latest  win-x64, win-arm64
-#   build-macos     macos-latest    mac-x64, mac-arm64
+#   build-macos     macos-latest    mac-x64 and mac-arm64, in one job
 #   publish         self-hosted     SHA256SUMS + the one release edit
 #
 # The self-hosted runner is arm64 Linux. electron-builder ships arm64-hosted
@@ -238,14 +238,15 @@ jobs:
 
   # -- macOS (GitHub-hosted) --------------------------------------------------
   # Ad-hoc signed by the builder config (identity '-'), not notarised.
+  # Both architectures build in one job, one after the other. macos-latest is
+  # an arm64 runner, and GitHub's arm64 macOS pool is often short of capacity:
+  # a job that waits too long is never given a runner and is cancelled, which
+  # fails the whole release. One job needs one runner from that pool instead
+  # of two, and building x64 on it is a cross-package that takes minutes.
   build-macos:
-    name: Build (mac-${{ matrix.arch }})
+    name: Build (mac)
     runs-on: macos-latest
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -269,16 +270,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The webpack output is the same for both architectures, so pack once.
       - name: Build
-        run: pnpm run ${{ matrix.arch == 'arm64' && 'build:arm64' || 'build' }}
+        run: |
+          pnpm run pack
+          pnpm run build-release
+          pnpm run build-release:arm64
+
+      # upload-artifact only fails when no file at all matches, so check both.
+      - name: Check both packages are present
+        run: |
+          status=0
+          for arch in x64 arm64; do
+            if ! compgen -G "build/*-mac-${arch}.dmg" >/dev/null; then
+              echo "ERROR: no package matching build/*-mac-${arch}.dmg" >&2
+              status=1
+            fi
+          done
+          exit $status
 
       - name: Upload packages
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: freetube-mac-${{ matrix.arch }}
+          name: freetube-mac
           overwrite: true
           path: |
-            build/*-mac-${{ matrix.arch }}.dmg
+            build/*-mac-x64.dmg
+            build/*-mac-arm64.dmg
           if-no-files-found: error
           retention-days: 7
 
