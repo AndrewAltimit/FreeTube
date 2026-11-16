@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Misc, YTNodes } from 'youtubei.js'
+import { Misc, Parser, YTNodes } from 'youtubei.js'
 
 import {
   CHANNEL_ID,
@@ -864,5 +864,21 @@ describe('extractLocalContentDisclosures', () => {
     expect(local.extractLocalContentDisclosures(info([]))).toBeNull()
     expect(local.extractLocalContentDisclosures({ page: [{}] })).toBeNull()
     expect(local.extractLocalContentDisclosures(undefined)).toBeNull()
+  })
+})
+
+describe('ShoppingTimelyShelfView parser', () => {
+  it('parses the shopping shelf into an empty node without a parser warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const section = Parser.parseItem({
+      itemSectionRenderer: {
+        contents: [{ shoppingTimelyShelfViewModel: { header: { title: 'Shop' }, items: [{ unknownThing: {} }] } }],
+      },
+    })
+
+    expect(section.contents).toHaveLength(1)
+    expect(section.contents[0].type).toBe('ShoppingTimelyShelfView')
+    expect(warn).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,4 @@
-import { ClientType, Constants, Innertube, Misc, Mixins, Parser, Platform, Player, Session, UniversalCache, Utils, YT, YTNodes } from 'youtubei.js'
+import { ClientType, Constants, Helpers, Innertube, Misc, Mixins, Parser, Platform, Player, Session, UniversalCache, Utils, YT, YTNodes } from 'youtubei.js'
 import Autolinker from 'autolinker'
 import { parseLooseJSON } from 'bgutils-js/utils'
 
@@ -74,6 +74,16 @@ if (process.env.SUPPORTS_LOCAL_API) {
         reject(new Error('Please setup the eval function for the n/sig deciphering'))
       }
     })
+  }
+
+  // Some watch pages include a shopping shelf that youtubei.js has no parser for. Generating one at runtime
+  // fails and logs a parser warning on every video load. FreeTube doesn't show the shelf, so it gets an empty node.
+  if (!Parser.hasParser('ShoppingTimelyShelfView')) {
+    class ShoppingTimelyShelfView extends Helpers.YTNode {
+      static type = 'ShoppingTimelyShelfView'
+    }
+
+    Parser.addRuntimeParser('ShoppingTimelyShelfView', ShoppingTimelyShelfView)
   }
 }
 

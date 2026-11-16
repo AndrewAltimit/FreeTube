@@ -1966,28 +1966,38 @@ export default defineComponent({
       this.startNextVideoInPip = uiState.startNextVideoInPip
     },
 
-    async saveWatchProgressForReload() {
+    /**
+     * Reloads the view, resuming at the current timestamp. When there is a timestamp to resume at, the reload
+     * happens through a route change (picked up by the `$route` watcher), so it must not also be started here:
+     * two concurrent reloads load two player responses and the players race each other.
+     */
+    async reloadAtCurrentTimestamp() {
       const timestamp = this.getTimestamp()
       if (timestamp > 0) {
-        // Reload at the middle should restart at current timestamp
-        try {
-          await this.$router.replace({
-            path: this.$route.path,
-            query: { ...this.$route.query, oneTimeTimestamp: timestamp },
-          })
-        } catch (failure) {
-          if (isNavigationFailure(failure, NavigationFailureType.duplicated)) {
-            // Already on route with same timestamp, allow reloadView to run instead
-          } else {
-            throw failure
-          }
+        // Reload at the middle should restart at current timestamp.
+        // vue-router resolves (rather than rejects) with a navigation failure when the route didn't change.
+        const failure = await this.$router.replace({
+          path: this.$route.path,
+          query: { ...this.$route.query, oneTimeTimestamp: timestamp },
+        })
+
+        if (!failure) {
+          return
         }
+
+        if (!isNavigationFailure(failure, NavigationFailureType.duplicated)) {
+          // Another navigation took over, leave the reload to it
+          return
+        }
+
+        // Already on route with same timestamp, the watcher won't fire, so reload below
       }
+
+      await this.reloadView()
     },
 
     onManualReloadRequested: throttle(async function () {
-      await this.saveWatchProgressForReload()
-      await this.reloadView()
+      await this.reloadAtCurrentTimestamp()
     }, 1000),
 
     async onSabrReloadRequested() {
@@ -2002,8 +2012,7 @@ export default defineComponent({
       }
 
       showToast(this.t('Video.Player.Reloading player at YouTube request'))
-      await this.saveWatchProgressForReload()
-      await this.reloadView()
+      await this.reloadAtCurrentTimestamp()
     },
 
     ...mapActions([
