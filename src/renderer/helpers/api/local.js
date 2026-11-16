@@ -581,7 +581,7 @@ function buildSessionFromYtConfig(ytConfig, fetchFunc) {
  * @param {string} poToken
  * @param {string | undefined} [clientOverride]
  */
-function createPlayerRequestBody(videoId, signatureTimestamp, poToken, clientOverride) {
+function createPlayerRequestBody(videoId, signatureTimestamp, poToken, clientOverride, reloadPlaybackToken) {
   return {
     videoId,
     racyCheckOk: true,
@@ -592,7 +592,9 @@ function createPlayerRequestBody(videoId, signatureTimestamp, poToken, clientOve
         splay: false,
         lactMilliseconds: '-1',
         signatureTimestamp
-      }
+      },
+      // Sent back when the SABR server asked for a new player response (RELOAD_PLAYER_RESPONSE)
+      reloadPlaybackContext: reloadPlaybackToken ? { reloadPlaybackParams: { token: reloadPlaybackToken } } : undefined
     },
     serviceIntegrityDimensions: {
       poToken
@@ -618,6 +620,8 @@ function createWatchNextRequestBody(videoId) {
 
 /**
  * @param {string} id
+ * @param {{ reloadPlaybackToken?: string }} [options] `reloadPlaybackToken` is the token from a SABR
+ * RELOAD_PLAYER_RESPONSE part. It forces a fresh `/player` request that carries it.
  * @returns {Promise<{
  *   info: import('youtubei.js').YT.VideoInfo,
  *   poToken: string | undefined,
@@ -630,7 +634,7 @@ function createWatchNextRequestBody(videoId) {
  *   adEndTimeUnixMs: number
  * }>}
  */
-export async function getLocalVideoInfo(id) {
+export async function getLocalVideoInfo(id, { reloadPlaybackToken } = {}) {
   let responseTime
   let totalAdTimeMilliseconds = 0
 
@@ -692,7 +696,7 @@ export async function getLocalVideoInfo(id) {
 
   if (!htmlExtracts.playerResponse && !htmlExtracts.nextResponse) {
     const combinedResponse = await htmlExtracts.session.actions.execute('/get_watch', {
-      playerRequest: createPlayerRequestBody(id, player.signature_timestamp, contentPoToken),
+      playerRequest: createPlayerRequestBody(id, player.signature_timestamp, contentPoToken, undefined, reloadPlaybackToken),
       watchNextRequest: createWatchNextRequestBody(id)
     })
 
@@ -708,12 +712,12 @@ export async function getLocalVideoInfo(id) {
       }).watchNextResponse
     }
   } else {
-    if (htmlExtracts.playerResponse) {
+    if (htmlExtracts.playerResponse && !reloadPlaybackToken) {
       totalAdTimeMilliseconds = extractTotalAdTimeMilliseconds(htmlExtracts.playerResponse)
 
       playerResponse = { data: htmlExtracts.playerResponse }
     } else {
-      const requestBody = createPlayerRequestBody(id, player.signature_timestamp, contentPoToken)
+      const requestBody = createPlayerRequestBody(id, player.signature_timestamp, contentPoToken, undefined, reloadPlaybackToken)
       playerResponse = await htmlExtracts.session.actions.execute('/player', requestBody)
     }
 

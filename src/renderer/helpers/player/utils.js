@@ -717,3 +717,55 @@ export function registerSabrReload(state, videoId, now) {
 
   return { allowed: true, state: { videoId, count: state.count + 1, lastReloadAt: now } }
 }
+
+/**
+ * @param {{ itag: number, lastModified: string, xtags?: string }} a
+ * @param {{ itag: number, lastModified: string, xtags?: string }} b
+ */
+function isSameSabrFormat(a, b) {
+  return a.itag === b.itag && a.lastModified === b.lastModified && (a.xtags || '') === (b.xtags || '')
+}
+
+/**
+ * Builds the SABR data to swap into a playing stream from a fresh player response, or returns null when the
+ * stream can't be refreshed in place. The player's manifest is built from the formats of the first response,
+ * so every one of them has to still exist; otherwise only a full player reload picks up the new formats.
+ * The client playback nonce (cpn) is kept, as the playback session carries on.
+ * @param {import('../../views/Watch/Watch').SabrData} current
+ * @param {{ itag: number, lastModified: string, xtags?: string }[]} currentFormats
+ * @param {{
+ *   streamingUrl?: string,
+ *   ustreamerConfig?: string,
+ *   poToken?: string,
+ *   clientInfo: import('../../views/Watch/Watch').SabrData['clientInfo'],
+ *   formats: { itag: number, lastModified: string, xtags?: string }[]
+ * }} refreshed
+ * @returns {import('../../views/Watch/Watch').SabrData | null}
+ */
+export function buildRefreshedSabrData(current, currentFormats, refreshed) {
+  if (!refreshed.streamingUrl || !refreshed.ustreamerConfig || (current.poToken && !refreshed.poToken)) {
+    return null
+  }
+
+  const allFormatsKept = currentFormats.every((format) => {
+    return refreshed.formats.some(candidate => isSameSabrFormat(format, candidate))
+  })
+
+  if (!allFormatsKept) {
+    return null
+  }
+
+  const url = new URL(refreshed.streamingUrl)
+  url.searchParams.set('alr', 'yes')
+  const cpn = new URL(current.url).searchParams.get('cpn')
+  if (cpn) {
+    url.searchParams.set('cpn', cpn)
+  }
+
+  return {
+    url: url.toString(),
+    poToken: refreshed.poToken,
+    ustreamerConfig: refreshed.ustreamerConfig,
+    clientInfo: refreshed.clientInfo,
+  }
+}

@@ -13,6 +13,7 @@ vi.mock('../../../../src/renderer/helpers/sponsorblock.js', () => ({
 
 const { sponsorBlockSkipSegments } = await import('../../../../src/renderer/helpers/sponsorblock.js')
 const {
+  buildRefreshedSabrData,
   deduplicateAudioTracks,
   findMostSimilarAudioBandwidth,
   getSponsorBlockSegments,
@@ -366,5 +367,49 @@ describe('registerSabrReload', () => {
     const exhausted = { videoId: 'abc', count: 2, lastReloadAt: 0 }
     expect(registerSabrReload(exhausted, 'xyz', 1000).allowed).toBe(true)
     expect(registerSabrReload(exhausted, 'abc', 5 * 60_000 + 1).allowed).toBe(true)
+  })
+})
+
+describe('buildRefreshedSabrData', () => {
+  const clientInfo = { clientName: 1, clientVersion: '2', osName: 'Windows', osVersion: '10' }
+  const current = { url: 'https://old.example/sabr?cpn=keep-me', poToken: 'old', ustreamerConfig: 'old', clientInfo }
+  const formats = [
+    { itag: 137, lastModified: '1', xtags: undefined },
+    { itag: 251, lastModified: '2', xtags: 'drc' },
+  ]
+  const refreshed = {
+    streamingUrl: 'https://new.example/sabr?cpn=new',
+    ustreamerConfig: 'new-config',
+    poToken: 'new-token',
+    clientInfo,
+    formats: [
+      { itag: 137, lastModified: '1', xtags: '' },
+      { itag: 251, lastModified: '2', xtags: 'drc' },
+      { itag: 248, lastModified: '3' },
+    ],
+  }
+
+  it('uses the new stream and credentials but keeps the playback nonce', () => {
+    const data = buildRefreshedSabrData(current, formats, refreshed)
+    const url = new URL(data.url)
+    expect(url.host).toBe('new.example')
+    expect(url.searchParams.get('cpn')).toBe('keep-me')
+    expect(url.searchParams.get('alr')).toBe('yes')
+    expect(data.poToken).toBe('new-token')
+    expect(data.ustreamerConfig).toBe('new-config')
+  })
+
+  it('refuses when a format the player knows about is gone', () => {
+    const withoutAudio = { ...refreshed, formats: refreshed.formats.filter(f => f.itag !== 251) }
+    expect(buildRefreshedSabrData(current, formats, withoutAudio)).toBeNull()
+
+    const changed = { ...refreshed, formats: [{ itag: 137, lastModified: '9' }, { itag: 251, lastModified: '2', xtags: 'drc' }] }
+    expect(buildRefreshedSabrData(current, formats, changed)).toBeNull()
+  })
+
+  it('refuses when the response has no SABR stream or lost its PO token', () => {
+    expect(buildRefreshedSabrData(current, formats, { ...refreshed, streamingUrl: undefined })).toBeNull()
+    expect(buildRefreshedSabrData(current, formats, { ...refreshed, ustreamerConfig: undefined })).toBeNull()
+    expect(buildRefreshedSabrData(current, formats, { ...refreshed, poToken: undefined })).toBeNull()
   })
 })
