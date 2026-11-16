@@ -45,16 +45,18 @@ A **dry run** builds everything without publishing: Actions > Release > Run work
 | `verify` | self-hosted | Tag/version check, `lint`, `test`, `pack:web` |
 | `build-linux` | self-hosted (arm64) | `linux-x64`, `linux-arm64` |
 | `build-windows` | GitHub-hosted `windows-latest` | `win-x64`, `win-arm64` |
-| `build-macos` | GitHub-hosted `macos-latest` | `mac-x64`, `mac-arm64` |
+| `build-macos` | GitHub-hosted `macos-latest` | `mac-x64` and `mac-arm64`, in one job |
 | `publish` | self-hosted | `SHA256SUMS`, the release |
 
-Each build job is a matrix over `x64` and `arm64`, and each leg uploads its own workflow artifact (`freetube-linux-x64`, `freetube-win-arm64` and so on), never one combined bundle. `publish` waits for `verify` and every build leg, checks that every OS/architecture pair produced every package listed below, writes `SHA256SUMS`, and makes the single release edit with the runner's `gh`. A release therefore never appears with a platform missing or ahead of the gate. The hosted builds start alongside `verify` instead of after it, since nothing is published until it passes.
+The Linux and Windows build jobs are matrices over `x64` and `arm64`, and each leg uploads its own workflow artifact (`freetube-linux-x64`, `freetube-win-arm64` and so on). macOS builds both architectures in one job and uploads them as `freetube-mac`, for the reason in the next section. `publish` waits for `verify` and every build leg, checks that every OS/architecture pair produced every package listed below, writes `SHA256SUMS`, and makes the single release edit with the runner's `gh`. A release therefore never appears with a platform missing or ahead of the gate. The hosted builds start alongside `verify` instead of after it, since nothing is published until it passes.
 
 ### Why Windows and macOS build on hosted runners
 
 electron-builder ships arm64-hosted builds of fpm and the AppImage tools, so both Linux architectures package on the arm64 runner. The x64 Linux build is a cross-package: it downloads the x64 Electron and packs it, compiling nothing.
 
 Windows and macOS cannot build on the runner the same way. A macOS build needs Apple's SDK, which cannot be put on a Linux machine. For Windows, the NSIS compiler (`makensis`) and the resource tooling electron-builder runs are not reliable on an arm64 Linux host. Both therefore build on GitHub-hosted runners, as upstream's builds do. Hosted minutes are free for a public repository.
+
+`macos-latest` is an arm64 runner, and GitHub's arm64 macOS pool often runs short. A job that waits too long for one is never started and is cancelled, and `publish` then skips, so the release fails. That is why `build-macos` is one job rather than a matrix: it needs one runner from that pool instead of two, and the x64 build on it is a cross-package that adds a few minutes. If a release still fails this way, re-run only the failed jobs; the other builds' artifacts are kept for seven days.
 
 ### Packages
 
