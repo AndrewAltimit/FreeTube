@@ -50,11 +50,6 @@ Both can be changed under Settings > Theme.
 - **Each release has builds** for Windows, macOS and Linux, on both x64 and arm64.
 
 <p align="center"><a href="https://github.com/AndrewAltimit/FreeTube/releases">Download</a></p>
-<p align="center">
-  <a href="https://hosted.weblate.org/engage/free-tube/">
-    <img src="https://hosted.weblate.org/widgets/free-tube/-/svg-badge.svg" alt="Translation status" />
-  </a>
-</p>
 
 <hr>
 <p align="center"><a href="#how-this-fork-differs-from-freetube">Differences</a> &bull; <a href="#screenshots">Screenshots</a> &bull; <a href="#how-does-it-work">How does it work?</a> &bull; <a href="#features">Features</a> &bull; <a href="#download-links">Download Links</a> &bull; <a href="#contributing">Contributing</a> &bull; <a href="#localization">Localization</a> &bull; <a href="#contact">Contact</a> &bull; <a href="#license">License</a></p>
@@ -141,13 +136,7 @@ This fork does not accept external contributions; see [CONTRIBUTING.md](CONTRIBU
 Thank you very much to the [People and Projects](https://docs.freetubeapp.io/credits/) that make FreeTube possible, and to the upstream FreeTube team, whose work this fork builds on.
 
 ## Localization
-Translations come from upstream FreeTube's Weblate project and are pulled in when this fork syncs with upstream. To help translate, contribute there:
-
-<a href="https://hosted.weblate.org/engage/free-tube/">
-<img src="https://hosted.weblate.org/widgets/free-tube/-/287x66-grey.png" alt="Translation status" />
-</a>
-
-We are actively looking for translations!  We use [Weblate](https://hosted.weblate.org/engage/free-tube/) to make it easy for translators to get involved.  Click on the badge above to learn how to get involved.
+Translations come from upstream FreeTube and are pulled in when this fork syncs with upstream.
 
 ## Contact
 This fork offers no support channel.
