@@ -1,4 +1,4 @@
-import { BotGuardClient, getChallenge } from 'bgutils-js/botguard'
+import { BotGuardClient } from 'bgutils-js/botguard'
 import { buildURL, GOOG_API_KEY } from 'bgutils-js/utils'
 import { WebPoMinter } from 'bgutils-js/webpo'
 
@@ -79,34 +79,11 @@ export default async function (videoId, context, initialAttestationData, ytConfi
     globalObject: window
   })
 
-  // The integrity token behind the PO token comes from the BotGuard program of the Waa/Create challenge for the
-  // request key, the way YouTube's web player gets it. The att/get program above is kept for the playback attestation.
-  const waaChallenge = await getChallenge({ fetchFunction: (input, init) => fetch(input, init), requestKey, useYouTubeAPI: true })
-
-  let waaInterpreterJavascript = waaChallenge.interpreterJavascript?.privateDoNotAccessOrElseSafeScriptWrappedValue
-  if (!waaInterpreterJavascript && waaChallenge.interpreterUrl) {
-    let waaInterpreterUrl = waaChallenge.interpreterUrl.privateDoNotAccessOrElseTrustedResourceUrlWrappedValue
-    if (waaInterpreterUrl.startsWith('//')) {
-      waaInterpreterUrl = `https:${waaInterpreterUrl}`
-    }
-    waaInterpreterJavascript = await (await fetch(waaInterpreterUrl)).text()
-  }
-
-  if (!waaInterpreterJavascript) {
-    throw new Error('Could not load the Waa VM.')
-  }
-
-  // eslint-disable-next-line no-new-func
-  new Function(waaInterpreterJavascript)()
-
-  const poTokenBotGuard = await BotGuardClient.create({
-    program: waaChallenge.program,
-    globalName: waaChallenge.globalName,
-    globalObject: window
-  })
-
+  // Like YouTube's web player (kevlar_base's WebPO minter): the integrity token comes from a snapshot of the page's
+  // attestation challenge VM above, taken with an empty object as the content binding. Without that binding the
+  // integrity token is accepted, but SABR sessions using PO tokens minted from it stay "attestation pending".
   const webPoSignalOutput = []
-  const botGuardResponse = await poTokenBotGuard.snapshot({ webPoSignalOutput }, 10_000)
+  const botGuardResponse = await botGuard.snapshot({ contentBinding: {}, webPoSignalOutput }, 10_000)
 
   const integrityTokenResponse = await fetch(buildURL('GenerateIT', true), {
     method: 'POST',
