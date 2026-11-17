@@ -34,6 +34,7 @@ import { handleOpenInExternalPlayer } from './externalPlayer'
 import { generatePoToken } from './poTokenGenerator'
 import { isFreeTubeUrl } from './utils'
 import { getInstallKind, installUpdate } from './updater'
+import { closeStartupSplash, findStartupUpdate, isStartupUpdateInProgress, runStartupUpdate } from './startupUpdate'
 
 const brotliDecompressAsync = promisify(brotliDecompress)
 
@@ -350,7 +351,8 @@ function runApp() {
 
         if (!(mainWindow && mainWindow.webContents)) {
           startupUrl = newStartupUrl
-          if (app.isReady()) await createWindow()
+          // The startup updater opens the main window itself once it is done, or quits to install
+          if (app.isReady() && !isStartupUpdateInProgress()) await createWindow()
           return
         }
 
@@ -520,6 +522,8 @@ function runApp() {
     let proxyProtocol = 'socks5'
     let proxyHostname = '127.0.0.1'
     let proxyPort = '9050'
+    let checkForUpdates = true
+    let installUpdatesOnStartup = true
 
     if (docArray?.length > 0) {
       docArray.forEach((doc) => {
@@ -550,6 +554,12 @@ function runApp() {
               trayOnMinimize = doc.value
             }
             break
+          case 'checkForUpdates':
+            checkForUpdates = doc.value
+            break
+          case 'installUpdatesOnStartup':
+            installUpdatesOnStartup = doc.value
+            break
         }
       })
     }
@@ -567,6 +577,12 @@ function runApp() {
         proxyRules: proxyUrl
       })
     }
+
+    // Started now, after the proxy is set, so the request overlaps the rest of startup. Not when FreeTube was
+    // opened with a link: the installer restarts it without one.
+    const startupUpdateCheck = checkForUpdates && installUpdatesOnStartup && !startupUrl
+      ? findStartupUpdate()
+      : null
 
     const fixedUserAgent = session.defaultSession.getUserAgent()
       .split(' ')
@@ -791,7 +807,13 @@ function runApp() {
       updateThemeSource(baseTheme?.value || DEFAULT_BASE_THEME)
     } catch {}
 
+    if (startupUpdateCheck && await runStartupUpdate(startupUpdateCheck)) {
+      // Quitting to install the update, the new version opens the window
+      return
+    }
+
     await createWindow()
+    closeStartupSplash()
 
     if (isDebug) {
       mainWindow.webContents.openDevTools()

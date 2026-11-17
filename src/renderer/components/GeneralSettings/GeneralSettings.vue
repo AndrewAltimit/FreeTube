@@ -11,6 +11,15 @@
           @change="updateCheckForUpdates"
         />
         <FtToggleSwitch
+          v-if="USING_ELECTRON"
+          :label="t('Settings.General Settings.Install Updates on Startup.Label')"
+          :default-value="installUpdatesOnStartup"
+          :disabled="!checkForUpdates"
+          :compact="true"
+          :tooltip="t('Settings.General Settings.Install Updates on Startup.Tooltip')"
+          @change="updateInstallUpdatesOnStartup"
+        />
+        <FtToggleSwitch
           v-if="SUPPORTS_LOCAL_API"
           :label="t('Settings.General Settings.Fallback to Non-Preferred Backend on Failure')"
           :default-value="backendFallback"
@@ -211,6 +220,16 @@ const checkForUpdates = computed(() => store.getters.getCheckForUpdates)
  */
 function updateCheckForUpdates(value) {
   store.dispatch('updateCheckForUpdates', value)
+}
+
+/** @type {import('vue').ComputedRef<boolean>} */
+const installUpdatesOnStartup = computed(() => store.getters.getInstallUpdatesOnStartup)
+
+/**
+ * @param {boolean} value
+ */
+function updateInstallUpdatesOnStartup(value) {
+  store.dispatch('updateInstallUpdatesOnStartup', value)
 }
 
 /** @type {import('vue').ComputedRef<boolean>} */

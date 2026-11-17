@@ -164,6 +164,8 @@ const state = {
   backendPreference: !process.env.SUPPORTS_LOCAL_API ? 'invidious' : 'local',
   barColor: false,
   checkForUpdates: true,
+  // Read by the main process at startup (src/main/startupUpdate.js), there is no renderer side effect
+  installUpdatesOnStartup: true,
   baseTheme: DEFAULT_BASE_THEME,
   mainColor: 'Red',
   secColor: 'Blue',

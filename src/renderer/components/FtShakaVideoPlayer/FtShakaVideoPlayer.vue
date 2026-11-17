@@ -139,6 +139,7 @@ import { FullWindowButton } from './player-components/FullWindowButton.js'
 import { LegacyQualitySelection } from './player-components/LegacyQualitySelection.js'
 import { ScreenshotButton } from './player-components/ScreenshotButton.js'
 import { StatsButton } from './player-components/StatsButton.js'
+import { CopyTimestampUrlButton } from './player-components/CopyTimestampUrlButton.js'
 import { TheatreModeButton } from './player-components/TheatreModeButton.js'
 import { AutoplayToggle } from './player-components/AutoplayToggle.js'
 import { SkipButton } from './player-components/SkipButton.js'
@@ -146,6 +147,7 @@ import { SkipButton } from './player-components/SkipButton.js'
 import { KeyboardShortcuts } from '../../../constants.js'
 import {
   addLiveHlsHistory,
+  buildTimestampedYouTubeUrl,
   deduplicateAudioTracks,
   findMostSimilarAudioBandwidth,
   getSponsorBlockSegments,
@@ -927,7 +929,7 @@ function configureUI(firstTime = false) {
     const firstTimeConfig = {
       addSeekBar: seekingIsPossible.value,
       customContextMenu: true,
-      contextMenuElements: ['ft_stats'],
+      contextMenuElements: ['ft_copy_timestamp_url', 'ft_stats'],
       enableTooltips: true,
       seekBarColors: {
         // shaka-player's chapter markers only show up part of the time for the DASH and audio formats
@@ -1915,6 +1917,26 @@ function registerLegacyQualitySelection() {
   shakaOverflowMenu.registerElement('ft_legacy_quality', new LegacyQualitySelectionFactory())
 }
 
+function registerCopyTimestampUrlButton() {
+  events.addEventListener('copyTimestampUrl', (/** @type {CustomEvent} */ event) => {
+    copyToClipboard(buildTimestampedYouTubeUrl(props.videoId, event.detail), {
+      messageOnSuccess: t('Share.YouTube URL copied to clipboard'),
+      messageOnError: t('Clipboard.Copy failed')
+    })
+  })
+
+  /**
+   * @implements {shaka.extern.IUIElement.Factory}
+   */
+  class CopyTimestampUrlButtonFactory {
+    create(rootElement, controls) {
+      return new CopyTimestampUrlButton(() => isLive.value, events, rootElement, controls)
+    }
+  }
+
+  shakaContextMenu.registerElement('ft_copy_timestamp_url', new CopyTimestampUrlButtonFactory())
+}
+
 function registerStatsButton() {
   events.addEventListener('setStatsVisibility', (/** @type {CustomEvent} */ event) => {
     showStats.value = event.detail
@@ -2006,6 +2028,7 @@ function cleanUpCustomPlayerControls() {
   shakaOverflowMenu.registerElement('ft_legacy_quality', null)
 
   shakaContextMenu.registerElement('ft_stats', null)
+  shakaContextMenu.registerElement('ft_copy_timestamp_url', null)
 
   shakaControls.registerElement('ft_screenshot', null)
   shakaOverflowMenu.registerElement('ft_screenshot', null)
@@ -2828,6 +2851,7 @@ onMounted(async () => {
   registerFullWindowButton()
   registerLegacyQualitySelection()
   registerStatsButton()
+  registerCopyTimestampUrlButton()
   registerSkipButtons()
 
   if (ui.isMobile()) {

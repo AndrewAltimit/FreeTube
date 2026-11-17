@@ -853,6 +853,64 @@ export function registerSabrReload(state, videoId, now) {
 }
 
 /**
+ * The time under the pointer on the seek bar, the way the bar maps positions to values.
+ * @param {number} clientX
+ * @param {{ left: number, width: number }} rect the range input's bounding rectangle
+ * @param {number} min
+ * @param {number} max
+ * @returns {number} seconds, clamped to the bar's range
+ */
+export function getSeekBarTimeAtPosition(clientX, rect, min, max) {
+  if (!(rect.width > 0) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    return Number.isFinite(min) ? min : 0
+  }
+
+  const fraction = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1)
+  return min + fraction * (max - min)
+}
+
+/**
+ * @param {string} videoId
+ * @param {number} seconds
+ * @returns {string} the YouTube watch URL starting at that time, the same form the share menu copies
+ */
+export function buildTimestampedYouTubeUrl(videoId, seconds) {
+  const time = Math.max(Math.floor(seconds), 0)
+  const url = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`
+  return time > 0 ? `${url}&t=${time}` : url
+}
+
+// A 403 from the video servers is usually short-lived: reloading the player (a new player response and fresh
+// streaming URLs) plays on. Retrying in a tight loop is what turns it into a real IP block, so the retries back off
+// and stop after a few per video within the window.
+const FORBIDDEN_RETRY_WINDOW_MS = 10 * 60_000
+const FORBIDDEN_RETRY_DELAYS_MS = [2_000, 6_000, 20_000]
+
+/**
+ * Decides whether the player may reload by itself after an HTTP 403, how long to wait first, and returns the
+ * updated retry state. The count resets for a different video or once the last retry is older than the window.
+ * @param {{ videoId: string, count: number, lastRetryAt: number } | null} state
+ * @param {string} videoId
+ * @param {number} now
+ * @returns {{ allowed: boolean, delayMs: number, state: { videoId: string, count: number, lastRetryAt: number } }}
+ */
+export function registerForbiddenRetry(state, videoId, now) {
+  if (state?.videoId !== videoId || now - state.lastRetryAt > FORBIDDEN_RETRY_WINDOW_MS) {
+    state = { videoId, count: 0, lastRetryAt: now }
+  }
+
+  if (state.count >= FORBIDDEN_RETRY_DELAYS_MS.length) {
+    return { allowed: false, delayMs: 0, state }
+  }
+
+  return {
+    allowed: true,
+    delayMs: FORBIDDEN_RETRY_DELAYS_MS[state.count],
+    state: { videoId, count: state.count + 1, lastRetryAt: now }
+  }
+}
+
+/**
  * @param {{ itag: number, lastModified: string, xtags?: string }} a
  * @param {{ itag: number, lastModified: string, xtags?: string }} b
  */

@@ -41,7 +41,7 @@ import {
   mapInvidiousLegacyFormat,
   youtubeImageUrlToInvidious
 } from '../../helpers/api/invidious'
-import { buildRefreshedSabrData, registerSabrReload, sortCaptions } from '../../helpers/player/utils'
+import { buildRefreshedSabrData, registerForbiddenRetry, registerSabrReload, sortCaptions } from '../../helpers/player/utils'
 import { MANIFEST_TYPE_SABR } from '../../helpers/player/SabrManifestParser'
 import { useI18n } from 'vue-i18n'
 
@@ -103,6 +103,9 @@ export default defineComponent({
     return {
       /** @type {{ videoId: string, count: number, lastReloadAt: number } | null} */
       sabrReloadState: null,
+      /** @type {{ videoId: string, count: number, lastRetryAt: number } | null} */
+      forbiddenRetryState: null,
+      forbiddenRetryTimeout: null,
       startNextVideoInFullscreen: false,
       startNextVideoInFullwindow: false,
       startNextVideoInPip: false,
@@ -1569,6 +1572,8 @@ export default defineComponent({
 
     handleRouteChange: function () {
       this.abortAutoplayCountdown(true)
+      clearTimeout(this.forbiddenRetryTimeout)
+      this.forbiddenRetryTimeout = null
       this.handleWatchProgressAutoSave()
     },
 
@@ -1596,6 +1601,10 @@ export default defineComponent({
           case 403:
             this.handleWatchProgressAutoSaveWhenProgressEnabled()
 
+            if (this.retryAfterForbidden()) {
+              return
+            }
+
             if (new Date() > this.streamingDataExpiryDate) {
               this.errorMessage = '[BAD_HTTP_STATUS: 403] YouTube watch session expired. Please reopen this video.'
               this.customErrorIcon = ['fas', 'clock']
@@ -1622,6 +1631,37 @@ export default defineComponent({
       }
 
       this.handleActiveFormatUnavailable()
+    },
+
+    /**
+     * A 403 usually clears up within seconds, and a reload with fresh streaming URLs plays on, so reload at the
+     * current timestamp after a short wait instead of showing the error (see registerForbiddenRetry).
+     * @returns {boolean} whether a retry was scheduled
+     */
+    retryAfterForbidden: function () {
+      const videoId = this.videoId
+      const { allowed, delayMs, state } = registerForbiddenRetry(this.forbiddenRetryState, videoId, Date.now())
+      this.forbiddenRetryState = state
+      if (!allowed) {
+        return false
+      }
+
+      // Taken now: the player can't report its position once the error is shown or it is destroyed
+      const timestamp = this.getTimestamp()
+      const routePath = this.$route.path
+
+      showToast(this.t('Video.Player.Retrying after HTTP 403', { seconds: Math.round(delayMs / 1000) }), delayMs)
+
+      clearTimeout(this.forbiddenRetryTimeout)
+      this.forbiddenRetryTimeout = setTimeout(() => {
+        this.forbiddenRetryTimeout = null
+        // The person moved on to another video while waiting
+        if (this.videoId !== videoId || this.$route.path !== routePath) {
+          return
+        }
+        this.reloadAtCurrentTimestamp(timestamp)
+      }, delayMs)
+      return true
     },
 
     handleActiveFormatUnavailable: function() {
@@ -1987,8 +2027,10 @@ export default defineComponent({
      * happens through a route change (picked up by the `$route` watcher), so it must not also be started here:
      * two concurrent reloads load two player responses and the players race each other.
      */
-    async reloadAtCurrentTimestamp() {
-      const timestamp = this.getTimestamp()
+    /**
+     * @param {number} [timestamp] where to resume, when the player can no longer report it
+     */
+    async reloadAtCurrentTimestamp(timestamp = this.getTimestamp()) {
       if (timestamp > 0) {
         // Reload at the middle should restart at current timestamp.
         // vue-router resolves (rather than rejects) with a navigation failure when the route didn't change.

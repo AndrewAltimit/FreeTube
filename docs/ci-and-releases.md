@@ -87,6 +87,12 @@ The update banner (`checkForNewUpdates` in `src/renderer/App.vue`) compares this
 
 An x64 build running under ARM64 translation downloads the arm64 package. Unpackaged dev builds, Flatpak, Snap and the web build get no install button and keep the link to the release page.
 
+### Installing at startup
+
+With **Check for Updates** and **Install Updates on Startup** both on, the Windows installer and the AppImage update before the main window opens. `src/main/startupUpdate.js` asks GitHub for the newest release as soon as the proxy is set, so the request overlaps the rest of startup. `selectStartupUpdateVersion` in `updateAssets.js` decides whether it is newer. When it is, a small frameless splash (`src/main/splashPage.js`, a sandboxed `data:` page the main process drives through `executeJavaScript`) shows download progress, and `installUpdate` installs it the same way as the banner button; the installer restarts FreeTube. The splash also shows when the check takes longer than 400 ms.
+
+Startup carries on normally when the check takes more than 4 s, fails or finds nothing, and when a download makes no progress for 30 s (an `AbortSignal` passed to `installUpdate`). It also carries on when FreeTube was opened with a link, because the restarted version would lose it. The other install kinds keep the banner: a disk image to drag or a password prompt at every launch isn't something to spring on someone at startup. A second instance launched while the splash is up opens no window; the startup updater opens it or quits to install.
+
 ## GitHub Pages site (parked)
 
 The fork does not publish a Pages site. The workflow that would deploy it, `pages.yml`, is parked in [`.github/workflows-disabled/`](../.github/workflows-disabled/README.md), and `release.yml` does not trigger it. The site's source stays in the repo and is still tested, so it can be switched back on by moving `pages.yml` into `.github/workflows/` and adding back a last `publish` step that runs `gh workflow run pages.yml --ref main` (with `actions: write` on that job).
