@@ -145,6 +145,7 @@ import { SkipButton } from './player-components/SkipButton.js'
 
 import { KeyboardShortcuts } from '../../../constants.js'
 import {
+  addLiveHlsHistory,
   deduplicateAudioTracks,
   findMostSimilarAudioBandwidth,
   getSponsorBlockSegments,
@@ -154,6 +155,7 @@ import {
   patchLiveHlsMainManifest,
   PLAYER_LOCALE_MAPPINGS,
   requestFilter,
+  resolveLiveHlsHistoryUri,
   SHAKA_CONTROL_KEYS_TO_SHORTCUTS,
   stopPowerSaveBlocker,
   translateSponsorBlockCategory
@@ -182,6 +184,11 @@ const props = defineProps({
   manifestMimeType: {
     type: String,
     required: true
+  },
+  /** The live stream can be seeked back through (YouTube's DVR), so its HLS playlists get the earlier segments listed */
+  liveDvrEnabled: {
+    type: Boolean,
+    default: false
   },
   sabrData: {
     type: Object,
@@ -430,6 +437,11 @@ watch(enterFullscreenOnDisplayRotate, (newValue) => {
 
 const seekingIsPossible = computed(() => {
   if (props.manifestMimeType !== 'application/x-mpegurl') {
+    return true
+  }
+
+  if (process.env.SUPPORTS_LOCAL_API && props.liveDvrEnabled) {
+    // the response filter lists the earlier segments in the live playlists
     return true
   }
 
@@ -1394,10 +1406,52 @@ async function responseFilter(type, response, context) {
       modifiedText = modifiedText.replaceAll('/file/seg.ts', '/file/seg.aac')
     }
 
+    if (props.liveDvrEnabled) {
+      if (!modifiedText) {
+        modifiedText = new TextDecoder().decode(response.data)
+      }
+
+      // shaka-player adds _HLS_skip=YES to refreshes once the playlist advertises delta updates
+      const isDeltaUpdate = new URL(response.originalUri).searchParams.get('_HLS_skip') === 'YES'
+      const itag = url.pathname.match(/\/itag\/(\d+)\//)?.[1] ?? url.searchParams.get('itag')
+      const result = addLiveHlsHistory(modifiedText, isDeltaUpdate ? (liveHlsNextSequences.get(itag) ?? null) : null)
+
+      if (result) {
+        modifiedText = result.playlist
+        liveHlsSegmentUrls.set(result.itag, result.segmentUrl)
+        liveHlsNextSequences.set(itag, result.nextSequence)
+      }
+    }
+
     if (modifiedText) {
       response.data = new TextEncoder().encode(modifiedText).buffer
     }
   }
+}
+
+/**
+ * Newest real segment URL per itag of the live HLS playlists, to build the earlier segments' URLs from
+ * @type {Map<string, string>}
+ */
+const liveHlsSegmentUrls = new Map()
+
+/**
+ * Per itag of the live HLS playlists, the first segment number not listed to shaka-player yet
+ * @type {Map<string, number>}
+ */
+const liveHlsNextSequences = new Map()
+
+/** @type {shaka.extern.RequestFilter} */
+function playerRequestFilter(type, request, context) {
+  if (type === RequestType.SEGMENT && liveHlsSegmentUrls.size > 0) {
+    const resolved = resolveLiveHlsHistoryUri(request.uris[0], liveHlsSegmentUrls)
+
+    if (resolved !== null) {
+      request.uris[0] = resolved
+    }
+  }
+
+  requestFilter(type, request, context)
 }
 
 // #endregion request/response filters
@@ -2752,7 +2806,7 @@ onMounted(async () => {
   player.configure(getPlayerConfig(props.format, defaultQuality.value === 'auto'))
 
   if (process.env.SUPPORTS_LOCAL_API) {
-    player.getNetworkingEngine().registerRequestFilter(requestFilter)
+    player.getNetworkingEngine().registerRequestFilter(playerRequestFilter)
     player.getNetworkingEngine().registerResponseFilter(responseFilter)
   }
 

@@ -27,8 +27,11 @@
         <FtNotificationBanner
           class="banner"
           :message="updateBannerMessage"
+          :action-label="updateInstallKind !== null && updateInstallState !== 'opened' ? t('Install Update') : ''"
+          :action-disabled="updateInstallState === 'downloading' || updateInstallState === 'installing'"
           role="link"
           @click="handleUpdateBannerClick"
+          @action="installLatestUpdate"
         />
       </div>
       <RouterView
@@ -64,6 +67,11 @@
         lang="en"
       />
       <FtFlexBox>
+        <FtButton
+          v-if="updateInstallKind !== null && updateInstallState !== 'opened'"
+          :label="t('Install Update')"
+          @click="installLatestUpdate"
+        />
         <FtButton
           :label="t('Download From Site')"
           @click="openDownloadsPage"
@@ -262,11 +270,66 @@ const latestReleaseUrl = ref(RELEASES_PAGE_URL)
 /** @type {import('vue').ComputedRef<boolean>} */
 const checkForUpdates = computed(() => store.getters.getCheckForUpdates)
 
+/**
+ * How this copy was installed, when the in-app updater can install updates for it
+ * @type {import('vue').Ref<'nsis' | 'dmg' | 'appimage' | 'deb' | 'rpm' | null>}
+ */
+const updateInstallKind = ref(null)
+
+/** @type {import('vue').Ref<'idle' | 'downloading' | 'installing' | 'opened'>} */
+const updateInstallState = ref('idle')
+const updateDownloadPercent = ref(0)
+
 const updateBannerMessage = computed(() => {
-  return t('Version {versionNumber} is now available!  Click for more details', {
-    versionNumber: latestVersionNumber.value
-  })
+  switch (updateInstallState.value) {
+    case 'downloading':
+      return t('Downloading version {versionNumber}: {percent}%', {
+        versionNumber: latestVersionNumber.value,
+        percent: updateDownloadPercent.value
+      })
+    case 'installing':
+      return t('Installing version {versionNumber}. FreeTube will restart when it is done', {
+        versionNumber: latestVersionNumber.value
+      })
+    case 'opened':
+      return t('Drag FreeTube into Applications in the window that opened to finish updating')
+    default:
+      return t('Version {versionNumber} is now available!  Click for more details', {
+        versionNumber: latestVersionNumber.value
+      })
+  }
 })
+
+async function installLatestUpdate() {
+  if (!process.env.IS_ELECTRON || updateInstallState.value === 'downloading' || updateInstallState.value === 'installing') {
+    return
+  }
+
+  showReleaseNotes.value = false
+  updateInstallState.value = 'downloading'
+  updateDownloadPercent.value = 0
+
+  try {
+    const { status } = await window.ftElectron.installUpdate(latestVersionNumber.value, (fraction) => {
+      updateDownloadPercent.value = Math.floor(fraction * 100)
+    })
+
+    if (status === 'installing' || status === 'opened') {
+      updateInstallState.value = status
+    } else {
+      // No build for this platform in the release, or one is already being installed
+      updateInstallState.value = 'idle'
+      if (status === 'unsupported') {
+        updateInstallKind.value = null
+        openDownloadsPage()
+      }
+    }
+  } catch (error) {
+    console.error('errored while installing the update', error)
+    updateInstallState.value = 'idle'
+    showToast(t('The update could not be installed. Download it from the releases page instead'))
+  }
+}
 
 async function checkForNewUpdates() {
   if (!checkForUpdates.value) {
@@ -296,6 +359,10 @@ async function checkForNewUpdates() {
     }
 
     showUpdatesBanner.value = true
+
+    if (process.env.IS_ELECTRON) {
+      updateInstallKind.value = await window.ftElectron.getUpdateInstallKind()
+    }
   } catch (error) {
     console.error('errored while checking for updates', RELEASES_API_URL, error)
   }
@@ -310,7 +377,10 @@ function toggleShowReleaseNotes() {
  */
 function handleUpdateBannerClick(response) {
   if (response) {
-    showReleaseNotes.value = true
+    // The banner shows progress while an update installs, there is nothing else to show then
+    if (updateInstallState.value === 'idle') {
+      showReleaseNotes.value = true
+    }
   } else {
     showUpdatesBanner.value = false
   }

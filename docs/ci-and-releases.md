@@ -70,9 +70,22 @@ The AppImage, deb and rpm targets substitute their distro's architecture spellin
 | Windows | `-setup.exe` (NSIS) |
 | macOS | `.dmg` |
 
-The fork builds one package per format people install from. Upstream also builds portable, zip and 7z archives and an Arch `.pacman`. The fork leaves them out: they repeat the packages above (FreeTube has no auto-updater that would need the macOS zip), and they roughly tripled the size and upload time of a release.
+The fork builds one package per format people install from. Upstream also builds portable, zip and 7z archives and an Arch `.pacman`. The fork leaves them out: they repeat the packages above (the in-app updater below installs from these packages, not from a macOS zip), and they roughly tripled the size and upload time of a release.
 
 macOS builds are ad-hoc signed (`identity: '-'` in the builder config), not notarised; Gatekeeper asks the user to confirm the first launch. Nothing is code-signed on Windows.
+
+### In-app updates
+
+The update banner (`checkForNewUpdates` in `src/renderer/App.vue`) compares this build's version with the newest release. When the main process can update this install, the banner and the release notes offer **Install Update**. The renderer passes only the version over IPC (`INSTALL_UPDATE`). `src/main/updater.js` looks that release up through the GitHub API, picks the package for this install, downloads it through the app's session (so the proxy setting applies), and refuses it unless its SHA-256 matches the release's `SHA256SUMS`. Asset selection and checksum parsing live in `src/main/updateAssets.js`, which accepts only download URLs under this repository's releases, and are unit tested in `tests/unit/main/updateAssets.test.js`. Renaming packages or dropping `SHA256SUMS` breaks the updater.
+
+| Install | Detected by | Install step |
+|---|---|---|
+| Windows | `process.platform` | Runs the NSIS installer with `--updated /S --force-run`, which installs silently and starts the new version |
+| AppImage | `APPIMAGE` env var | Swaps the file in place, then relaunches |
+| deb / rpm | `dpkg -S` / `rpm -qf` own the executable | `pkexec dpkg -i` or `pkexec rpm -U`, then relaunches |
+| macOS | `process.platform` | Opens the disk image; the person drags the app into Applications |
+
+An x64 build running under ARM64 translation downloads the arm64 package. Unpackaged dev builds, Flatpak, Snap and the web build get no install button and keep the link to the release page.
 
 ## GitHub Pages site (parked)
 

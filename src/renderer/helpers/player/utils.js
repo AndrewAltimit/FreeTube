@@ -520,6 +520,140 @@ export function hlsProxiedUrlReplacer(match) {
   return url.toString()
 }
 
+/** How far behind the newest segment live HLS playback sits, so a network hiccup drains buffer instead of stalling */
+export const LIVE_HLS_HOLD_BACK_SECONDS = 30
+
+/** YouTube keeps up to 12 hours of a live stream seekable */
+const LIVE_HLS_MAX_HISTORY_SECONDS = 12 * 60 * 60
+
+/** Placeholder host for the earlier segments, which the request filter swaps for the real segment URL */
+const LIVE_HLS_HISTORY_HOST = 'ft-live-history.invalid'
+
+const HLS_SEGMENT_SEQUENCE_REGEX = /\/sq\/(\d+)\//
+const HLS_SEGMENT_ITAG_REGEX = /\/itag\/(\d+)\//
+const HLS_SEGMENT_FILE_REGEX = /\/file\/[^/]+$/
+
+/**
+ * YouTube's live HLS media playlists only list the newest few segments, even though every earlier segment of the
+ * stream can still be downloaded by changing the `/sq/` number in a segment URL. This lists the earlier segments
+ * too, so shaka-player can seek back through the stream and start behind the live edge with a buffer to spare.
+ *
+ * The earlier segments get short placeholder URLs (see {@link resolveLiveHlsHistoryUri}), because the real ones
+ * are about 1.7 KB each and hours of them would be megabytes. They are only listed in full the first time:
+ * the playlist advertises delta updates (`CAN-SKIP-UNTIL`), so shaka-player asks with `_HLS_skip=YES` on every
+ * refresh after that and gets an `EXT-X-SKIP` in place of the segments it was already given.
+ * Segments that left YouTube's short playlist between two refreshes (a network outage, for example) were never
+ * given, so a delta update lists those as placeholders after the skip, starting from the last segment that was
+ * given. Skipping them too would leave a hole that shaka-player can't place the newer segments after.
+ *
+ * `EXT-X-PROGRAM-DATE-TIME` is dropped, so the segments are timed from the media sequence and their durations.
+ * The newest segment's real URL is returned for the request filter to build the earlier segments' URLs from.
+ * @param {string} playlist
+ * @param {number | null} nextUnlistedSequence for a delta update (`_HLS_skip=YES`), the `nextSequence` returned
+ * for the same itag last time; null for a full playlist
+ * @param {number} [maxHistorySeconds]
+ * @returns {{ playlist: string, itag: string, segmentUrl: string, nextSequence: number } | null}
+ * null when the playlist can't be extended
+ */
+export function addLiveHlsHistory(playlist, nextUnlistedSequence, maxHistorySeconds = LIVE_HLS_MAX_HISTORY_SECONDS) {
+  const lines = playlist.trim().split('\n')
+
+  if (lines.some(line => /^#EXT-X-(?:ENDLIST|PLAYLIST-TYPE|SERVER-CONTROL|SKIP|PART|MAP|KEY)\b/.test(line))) {
+    return null
+  }
+
+  const firstSegmentIndex = lines.findIndex(line => line.startsWith('#EXTINF:'))
+  const mediaSequenceLine = lines.find(line => line.startsWith('#EXT-X-MEDIA-SEQUENCE:'))
+
+  if (firstSegmentIndex === -1 || mediaSequenceLine === undefined) {
+    return null
+  }
+
+  const mediaSequence = parseInt(mediaSequenceLine.slice('#EXT-X-MEDIA-SEQUENCE:'.length))
+  const segmentDuration = parseFloat(lines[firstSegmentIndex].slice('#EXTINF:'.length))
+  const firstSegmentUrl = lines[firstSegmentIndex + 1] ?? ''
+  const segmentUrl = lines.findLast(line => !line.startsWith('#') && line.length > 0)
+
+  const itag = segmentUrl.match(HLS_SEGMENT_ITAG_REGEX)?.[1]
+  const fileSuffix = segmentUrl.match(HLS_SEGMENT_FILE_REGEX)?.[0]
+
+  // Only extend playlists whose segment numbers line up with the media sequence, as YouTube's do
+  if (
+    isNaN(mediaSequence) || !(segmentDuration > 0) || itag === undefined || fileSuffix === undefined ||
+    firstSegmentUrl.match(HLS_SEGMENT_SEQUENCE_REGEX)?.[1] !== String(mediaSequence)
+  ) {
+    return null
+  }
+
+  const historyStart = Math.max(0, mediaSequence - Math.floor(maxHistorySeconds / segmentDuration))
+
+  const output = lines.slice(0, firstSegmentIndex)
+    .filter(line => !line.startsWith('#EXT-X-MEDIA-SEQUENCE:') && !line.startsWith('#EXT-X-PROGRAM-DATE-TIME:'))
+
+  output.push(
+    `#EXT-X-MEDIA-SEQUENCE:${historyStart}`,
+    `#EXT-X-SERVER-CONTROL:CAN-SKIP-UNTIL=${maxHistorySeconds},HOLD-BACK=${LIVE_HLS_HOLD_BACK_SECONDS}`
+  )
+
+  // Everything before nextUnlistedSequence was listed in an earlier response, so shaka-player already has it.
+  // The first segment after the skip must be one it already has: it anchors the new segments' times to it,
+  // and for an unknown one it falls back to the start of the seek range, which wrecks the timeline.
+  const firstPlaceholder = nextUnlistedSequence === null
+    ? historyStart
+    : Math.min(Math.max(nextUnlistedSequence - 1, historyStart), mediaSequence)
+
+  if (firstPlaceholder > historyStart) {
+    output.push(`#EXT-X-SKIP:SKIPPED-SEGMENTS=${firstPlaceholder - historyStart}`)
+  }
+
+  for (let sequence = firstPlaceholder; sequence < mediaSequence; sequence++) {
+    output.push(
+      `#EXTINF:${segmentDuration},`,
+      `https://${LIVE_HLS_HISTORY_HOST}/itag/${itag}/sq/${sequence}${fileSuffix}`
+    )
+  }
+
+  let segmentCount = 0
+  for (let i = firstSegmentIndex; i < lines.length; i++) {
+    if (!lines[i].startsWith('#EXT-X-PROGRAM-DATE-TIME:')) {
+      output.push(lines[i])
+    }
+    if (lines[i].startsWith('#EXTINF:')) {
+      segmentCount++
+    }
+  }
+
+  return {
+    playlist: output.join('\n') + '\n',
+    itag,
+    segmentUrl,
+    nextSequence: mediaSequence + segmentCount
+  }
+}
+
+/**
+ * Turns a placeholder URL from {@link addLiveHlsHistory} into the real segment URL,
+ * using the newest real segment URL seen for the same itag.
+ * @param {string} uri
+ * @param {Map<string, string>} segmentUrlsByItag
+ * @returns {string | null} null when the URI isn't a placeholder or there is no URL to build it from
+ */
+export function resolveLiveHlsHistoryUri(uri, segmentUrlsByItag) {
+  if (!uri.startsWith(`https://${LIVE_HLS_HISTORY_HOST}/`)) {
+    return null
+  }
+
+  const itag = uri.match(HLS_SEGMENT_ITAG_REGEX)?.[1]
+  const sequence = uri.match(HLS_SEGMENT_SEQUENCE_REGEX)?.[1]
+  const template = itag === undefined ? undefined : segmentUrlsByItag.get(itag)
+
+  if (template === undefined || sequence === undefined) {
+    return null
+  }
+
+  return template.replace(HLS_SEGMENT_SEQUENCE_REGEX, `/sq/${sequence}/`)
+}
+
 /**
  * @param {shaka.extern.xml.Node} adaptationSet
  */

@@ -33,6 +33,7 @@ import packageDetails from '../../package.json'
 import { handleOpenInExternalPlayer } from './externalPlayer'
 import { generatePoToken } from './poTokenGenerator'
 import { isFreeTubeUrl } from './utils'
+import { getInstallKind, installUpdate } from './updater'
 
 const brotliDecompressAsync = promisify(brotliDecompress)
 
@@ -1374,6 +1375,24 @@ function runApp() {
   })
 
   // #endregion navigation history
+
+  ipcMain.handle(IpcChannels.GET_UPDATE_INSTALL_KIND, (event) => {
+    if (isFreeTubeUrl(event.senderFrame.url)) {
+      return getInstallKind()
+    }
+  })
+
+  ipcMain.handle(IpcChannels.INSTALL_UPDATE, (event, version) => {
+    if (!isFreeTubeUrl(event.senderFrame.url)) {
+      return
+    }
+
+    return installUpdate(version, (fraction) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(IpcChannels.INSTALL_UPDATE_PROGRESS, fraction)
+      }
+    })
+  })
 
   ipcMain.handle(IpcChannels.GET_SYSTEM_LOCALE, (event) => {
     if (isFreeTubeUrl(event.senderFrame.url)) {
