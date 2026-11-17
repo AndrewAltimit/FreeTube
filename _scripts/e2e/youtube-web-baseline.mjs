@@ -3,7 +3,10 @@
 // If YouTube's own player is also stuck at status 2 ("attestation pending") from this machine, the problem is the
 // network or IP, not FreeTube. Opens a visible Chrome window, as headless Chrome is treated differently by BotGuard.
 //
-// Usage: node _scripts/e2e/youtube-web-baseline.mjs [--video <id>] [--seek <seconds>] [--play <seconds>] [--watch <seconds>]
+// With --block-atr, the player's attestation ping (/api/stats/atr) is dropped, to see whether the stream still leaves
+// "attestation pending" without it.
+//
+// Usage: node _scripts/e2e/youtube-web-baseline.mjs [--video <id>] [--seek <seconds>] [--play <seconds>] [--watch <seconds>] [--block-atr]
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -22,6 +25,7 @@ const { values: args } = parseArgs({
     seek: { type: 'string', default: '120' },
     play: { type: 'string', default: '8' },
     watch: { type: 'string', default: '30' },
+    'block-atr': { type: 'boolean', default: false },
   },
 })
 
@@ -50,8 +54,16 @@ const context = await chromium.launchPersistentContext(profileDir, {
   args: ['--disable-blink-features=AutomationControlled'],
 })
 
+if (args['block-atr']) {
+  await context.route('**/api/stats/atr*', (route) => {
+    console.log(`${elapsed()}s  blocked ${route.request().url().split('?')[0]}`)
+    return route.abort()
+  })
+}
+
 /** @type {string[]} */
 const statuses = []
+let lastPoTokenLength = -1
 
 context.on('request', (request) => {
   const url = request.url()
@@ -68,6 +80,10 @@ context.on('request', (request) => {
         const keys = Object.keys(ctx).filter(key => ctx[key] != null && !(Array.isArray(ctx[key]) && ctx[key].length === 0))
         if (statuses.length === 0) {
           console.log(`${elapsed()}s     first SABR request: poToken ${ctx.poToken?.length ?? 0} bytes, streamerContext fields: ${keys.join(', ')}`)
+        }
+        if ((ctx.poToken?.length ?? 0) !== lastPoTokenLength) {
+          lastPoTokenLength = ctx.poToken?.length ?? 0
+          console.log(`${elapsed()}s     SABR requests now carry a ${lastPoTokenLength}-byte poToken`)
         }
       } catch {}
     }

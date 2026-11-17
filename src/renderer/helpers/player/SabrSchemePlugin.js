@@ -32,6 +32,15 @@ const MAX_POLICY_RETRIES = 20
 // How many times one segment request may refresh the stream in place before it falls back to a full player reload
 const MAX_REFRESHES_PER_REQUEST = 1
 
+// "Attestation pending" (stream protection status 2): YouTube hasn't accepted the PO token. It sends about a minute of
+// media, then only policy-only responses, and waiting doesn't change that. So when the stalled responses say
+// "attestation pending", the stream is refreshed (a new PO token) after this many policy-only retries instead of
+// MAX_POLICY_RETRIES...
+const MAX_PENDING_POLICY_RETRIES = 5
+// ...and up to this many times per stream, as freshly minted tokens are sometimes rejected several times in a row.
+// These refreshes don't use the reload budget; once they run out, the player is reloaded.
+const MAX_ATTESTATION_REFRESHES = 3
+
 /**
  * @typedef OperationInputs
  * @type {object}
@@ -67,6 +76,7 @@ const MAX_REFRESHES_PER_REQUEST = 1
  * @property {number} cumulativeBackOffRequested
  * @property {number} cumulativeRetryDueToNextRequestPolicy
  * @property {number} refreshCount
+ * @property {boolean} attestationPending whether the latest response reported "attestation pending" (status 2)
  * @property {?RefreshStreamingData} refreshStreamingData
  * @property {() => import('googlevideo/protos').BufferedRange[]} getBufferedRanges
  */
@@ -84,12 +94,15 @@ const MAX_REFRESHES_PER_REQUEST = 1
  * @property {Uint8Array} ustreamerConfig
  * @property {import('../../views/Watch/Watch').SabrData['clientInfo']} clientInfo
  * @property {?Promise<boolean>} refreshPromise
+ * @property {number} attestationRefreshes refreshes made because the stream stalled on "attestation pending"
  */
 /**
  * Fetches a new player response for the current video and returns its SABR data, or null when the stream
  * can't be refreshed in place (the caller then falls back to a full player reload).
  * @callback RefreshStreamingData
  * @param {string | undefined} reloadPlaybackToken
+ * @param {{ attestationPending?: boolean }} [options] `attestationPending` marks a refresh for a stream stalled on
+ * "attestation pending"; the player caps those itself (MAX_ATTESTATION_REFRESHES), so they skip the reload budget
  * @returns {Promise<import('../../views/Watch/Watch').SabrData | null>}
  */
 /**
@@ -353,9 +366,10 @@ function createTimeoutController(callback, timeoutMs) {
  * @param {SabrStreamState} sabrStreamState
  * @param {?RefreshStreamingData} refreshStreamingData
  * @param {string | undefined} reloadPlaybackToken
+ * @param {{ attestationPending?: boolean }} [options] passed on to `refreshStreamingData`
  * @returns {Promise<boolean>} whether the stream was refreshed
  */
-export function refreshSabrStream(sabrStreamState, refreshStreamingData, reloadPlaybackToken) {
+export function refreshSabrStream(sabrStreamState, refreshStreamingData, reloadPlaybackToken, options) {
   if (!refreshStreamingData || sabrStreamState.playerReloadRequested) {
     return Promise.resolve(false)
   }
@@ -363,7 +377,7 @@ export function refreshSabrStream(sabrStreamState, refreshStreamingData, reloadP
   if (!sabrStreamState.refreshPromise) {
     const promise = (async () => {
       try {
-        const sabrData = await refreshStreamingData(reloadPlaybackToken)
+        const sabrData = await refreshStreamingData(reloadPlaybackToken, options)
         if (!sabrData) return false
 
         sabrStreamState.sabrUrl = sabrData.url
@@ -452,18 +466,37 @@ function prepareRetry(currentState) {
  * @param {CurrentState} currentState
  * @param {string | undefined} reloadPlaybackToken
  * @param {string} reason for development logging
+ * @param {boolean} [attestationPending] the stream stalled on "attestation pending": the refresh counts against the
+ * stream's MAX_ATTESTATION_REFRESHES instead of the request's MAX_REFRESHES_PER_REQUEST
  */
-async function recoverStream(operationInputs, currentState, reloadPlaybackToken, reason) {
+async function recoverStream(operationInputs, currentState, reloadPlaybackToken, reason, attestationPending = false) {
   if (process.env.NODE_ENV === 'development') {
     console.warn(`[SABR] ${reason} for ${operationInputs.formatIdString} sq=${operationInputs.sequenceNumber}, refreshing the stream`)
   }
 
+  const sabrStreamState = currentState.sabrStreamState
+  let canRefresh
+  if (sabrStreamState.refreshPromise) {
+    // Another request (audio or video) is already refreshing: share it rather than spend another one
+    canRefresh = true
+  } else if (attestationPending) {
+    canRefresh = sabrStreamState.attestationRefreshes < MAX_ATTESTATION_REFRESHES
+    if (canRefresh) sabrStreamState.attestationRefreshes++
+  } else {
+    canRefresh = currentState.refreshCount < MAX_REFRESHES_PER_REQUEST
+    if (canRefresh) currentState.refreshCount++
+  }
+
   let refreshed = false
-  if (currentState.refreshCount < MAX_REFRESHES_PER_REQUEST) {
-    currentState.refreshCount++
+  if (canRefresh) {
     // The refresh fetches a whole player response, don't count it against the segment's timeout
     currentState.timeoutController?.clearTimeout()
-    refreshed = await refreshSabrStream(currentState.sabrStreamState, currentState.refreshStreamingData, reloadPlaybackToken)
+    refreshed = await refreshSabrStream(
+      sabrStreamState,
+      currentState.refreshStreamingData,
+      reloadPlaybackToken,
+      attestationPending ? { attestationPending: true } : undefined,
+    )
     currentState.timeoutController?.restart()
   }
 
@@ -594,13 +627,18 @@ async function doRequest(
         shouldReloadDueToBackoffLoop = true
       }
     }
-    if (shouldReloadDueToBackoffLoop || currentState.cumulativeRetryDueToNextRequestPolicy >= MAX_POLICY_RETRIES) {
+    const stalledOnAttestation = !shouldReloadDueToBackoffLoop && currentState.attestationPending
+    const policyRetryLimit = stalledOnAttestation ? MAX_PENDING_POLICY_RETRIES : MAX_POLICY_RETRIES
+    if (shouldReloadDueToBackoffLoop || currentState.cumulativeRetryDueToNextRequestPolicy >= policyRetryLimit) {
       // Retry loop detected: a fresh player response usually gets the server sending media again
       return recoverStream(
         operationInputs,
         currentState,
         undefined,
-        shouldReloadDueToBackoffLoop ? 'backoff loop' : `${MAX_POLICY_RETRIES} policy-only retries`,
+        shouldReloadDueToBackoffLoop
+          ? 'backoff loop'
+          : `${policyRetryLimit} policy-only retries${stalledOnAttestation ? ' (attestation pending)' : ''}`,
+        stalledOnAttestation,
       )
     }
 
@@ -638,6 +676,7 @@ async function doRequest(
             const streamProtectionStatus = decodePart(part, StreamProtectionStatus)
             if (!streamProtectionStatus) break
 
+            currentState.attestationPending = streamProtectionStatus.status === 2
             if (streamProtectionStatus.status === 3) {
               invalidPoToken = true
             }
@@ -918,6 +957,7 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
     ustreamerConfig: base64ToU8(sabrData.ustreamerConfig),
     clientInfo: deepCopy(sabrData.clientInfo),
     refreshPromise: null,
+    attestationRefreshes: 0,
   }
 
   shaka.net.NetworkingEngine.registerScheme('sabr', (uri, request, requestType, _progressUpdated, headersReceived, _config) => {
@@ -1116,6 +1156,7 @@ export function setupSabrScheme(sabrData, getPlayer, getManifest, playerWidth, p
       cumulativeBackOffRequested: 0,
       cumulativeRetryDueToNextRequestPolicy: 0,
       refreshCount: 0,
+      attestationPending: false,
       refreshStreamingData: refreshStreamingData ?? null,
       getBufferedRanges,
     }

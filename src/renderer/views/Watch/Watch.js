@@ -2014,17 +2014,21 @@ export default defineComponent({
      * background so the stream carries on from its buffer. Returns null when that isn't possible, and the
      * player then falls back to a full reload (onSabrReloadRequested).
      * @param {string | undefined} reloadPlaybackToken
+     * @param {{ attestationPending?: boolean }} [options] `attestationPending`: the stream stalled because YouTube
+     * hasn't accepted the PO token; the player caps those refreshes per stream, so they skip the reload budget
      * @returns {Promise<SabrData | null>}
      */
-    async refreshSabrData(reloadPlaybackToken) {
+    async refreshSabrData(reloadPlaybackToken, { attestationPending = false } = {}) {
       const videoId = this.videoId
       const currentSabrData = this.sabrData
       if (!currentSabrData) return null
 
-      // Shares its budget with full reloads: each one is a PO token and a player request (see registerSabrReload)
-      const { allowed, state } = registerSabrReload(this.sabrReloadState, videoId, Date.now())
-      this.sabrReloadState = state
-      if (!allowed) return null
+      if (!attestationPending) {
+        // Shares its budget with full reloads: each one is a PO token and a player request (see registerSabrReload)
+        const { allowed, state } = registerSabrReload(this.sabrReloadState, videoId, Date.now())
+        this.sabrReloadState = state
+        if (!allowed) return null
+      }
 
       const { info, poToken, clientInfo } = await getLocalVideoInfo(videoId, { reloadPlaybackToken })
 
