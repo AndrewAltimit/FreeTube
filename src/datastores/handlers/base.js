@@ -403,15 +403,18 @@ class SubscriptionCache {
   }
 }
 
-function loadDatastores() {
-  return Promise.allSettled([
-    db.settings.loadDatabaseAsync(),
+async function loadDatastores() {
+  // The main process reads settings before it opens the first window. Load that small file on its own first,
+  // so the window isn't waiting behind the large subscription cache being parsed and rewritten.
+  const [settingsResult] = await Promise.allSettled([db.settings.loadDatabaseAsync()])
+
+  return [settingsResult, ...await Promise.allSettled([
     db.history.loadDatabaseAsync(),
     db.profiles.loadDatabaseAsync(),
     db.playlists.loadDatabaseAsync(),
     db.searchHistory.loadDatabaseAsync(),
     db.subscriptionCache.loadDatabaseAsync(),
-  ])
+  ])]
 }
 
 function compactAllDatastores() {

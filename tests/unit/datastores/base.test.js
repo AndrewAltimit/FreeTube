@@ -647,6 +647,37 @@ describe('datastore lifecycle helpers', () => {
     expect(results.map(r => r.status)).toEqual(['fulfilled', 'fulfilled', 'rejected', 'fulfilled', 'fulfilled', 'fulfilled'])
   })
 
+  it('loadDatastores finishes loading settings before it starts the other datastores', async () => {
+    let settingsLoaded = false
+    let finishSettings
+    vi.spyOn(db.settings, 'loadDatabaseAsync').mockImplementation(() => new Promise((resolve) => {
+      finishSettings = () => { settingsLoaded = true; resolve() }
+    }))
+    const others = names.slice(1).map(name => vi.spyOn(db[name], 'loadDatabaseAsync').mockImplementation(async () => {
+      expect(settingsLoaded).toBe(true)
+    }))
+
+    const loading = handlers.loadDatastores()
+    await Promise.resolve()
+    others.forEach(spy => expect(spy).not.toHaveBeenCalled())
+
+    finishSettings()
+    const results = await loading
+
+    others.forEach(spy => expect(spy).toHaveBeenCalledOnce())
+    expect(results.every(r => r.status === 'fulfilled')).toBe(true)
+  })
+
+  it('loadDatastores still loads the other datastores when settings fails', async () => {
+    vi.spyOn(db.settings, 'loadDatabaseAsync').mockRejectedValueOnce(new Error('corrupt'))
+    const others = names.slice(1).map(name => vi.spyOn(db[name], 'loadDatabaseAsync').mockResolvedValue())
+
+    const results = await handlers.loadDatastores()
+
+    others.forEach(spy => expect(spy).toHaveBeenCalledOnce())
+    expect(results.map(r => r.status)).toEqual(['rejected', 'fulfilled', 'fulfilled', 'fulfilled', 'fulfilled', 'fulfilled'])
+  })
+
   it('compactAllDatastores compacts all six datastores', async () => {
     const spies = names.map(name => vi.spyOn(db[name], 'compactDatafileAsync').mockResolvedValue())
 
