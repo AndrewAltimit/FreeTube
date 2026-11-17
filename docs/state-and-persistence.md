@@ -51,3 +51,5 @@ The subscription list is in `profiles`; the fetched feeds are in `subscription-c
 3. Fetch per channel via the Local API, Invidious, or RSS (`parseYouTubeRSSFeed` in `helpers/subscriptions.js`), then write results back to the cache.
 
 `helpers/subscriptions.js` (`updateVideoListAfterProcessing`) applies the shared filtering and sorting.
+
+A remote fetch over a feed that is already on screen runs in the background (`isRefreshing` in each tab, the spinning icon in `FtRefreshWidget`): the current list stays up, and the new results replace it in one step when every channel has answered. A channel whose fetch returns nothing usable (`videos` of `null`, e.g. a 403 on its RSS feed) keeps its cached entries in the new list, and error channels are swapped in at the end rather than cleared up front. `FtElementList` keys cards by item and occurrence, not by position, so new items slot in above existing cards and the rest move rather than remount. `FtListVideo` re-parses its data when a kept card receives a new object, which is how a stream that has ended loses its LIVE badge on the next refresh.

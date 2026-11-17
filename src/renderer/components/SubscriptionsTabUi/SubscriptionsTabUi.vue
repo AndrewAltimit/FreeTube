@@ -65,6 +65,7 @@
 
     <FtRefreshWidget
       :disable-refresh="isLoading || !activeProfileHasSubscriptions"
+      :refreshing="isRefreshing"
       :last-refresh-timestamp="lastRefreshTimestamp"
       :title="title"
       @click="refresh"
@@ -89,6 +90,11 @@ import { KeyboardShortcuts } from '../../../constants'
 
 const props = defineProps({
   isLoading: {
+    type: Boolean,
+    default: false
+  },
+  /** A remote refresh is running while the current list stays on screen */
+  isRefreshing: {
     type: Boolean,
     default: false
   },
@@ -219,7 +225,7 @@ function keyboardShortcutHandler(event) {
   switch (event.key.toLowerCase()) {
     case 'f5':
     case KeyboardShortcuts.APP.SITUATIONAL.REFRESH:
-      if (!props.isLoading && activeProfileHasSubscriptions.value) {
+      if (!props.isLoading && !props.isRefreshing && activeProfileHasSubscriptions.value) {
         refresh()
       }
       break

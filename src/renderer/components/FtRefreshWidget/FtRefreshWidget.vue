@@ -9,10 +9,12 @@
       {{ t('Feed.Feed Last Updated', { feedName: title, date: lastRefreshTimestamp }) }}
     </p>
     <FtIconButton
-      :disabled="disableRefresh"
+      :disabled="disableRefresh || refreshing"
       :icon="['fas', 'sync']"
       class="refreshButton"
-      :title="refreshFeedButtonTitle"
+      :class="{ refreshing }"
+      :aria-busy="refreshing"
+      :title="refreshing ? t('Feed.Refreshing Feed', { subscriptionName: title }) : refreshFeedButtonTitle"
       :size="12"
       theme="primary"
       @click="click"
@@ -31,6 +33,11 @@ import { addKeyboardShortcutToActionTitle } from '../../helpers/utils'
 
 const props = defineProps({
   disableRefresh: {
+    type: Boolean,
+    default: false
+  },
+  /** A refresh is in progress: the icon spins and the button is disabled until it finishes */
+  refreshing: {
     type: Boolean,
     default: false
   },

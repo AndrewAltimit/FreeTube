@@ -161,6 +161,7 @@ Most Popular: Most Popular
 Feed:
   Feed Last Updated: '{feedName} feed last updated: {date}'
   Refresh Feed: Refresh {subscriptionName}
+  Refreshing Feed: Checking {subscriptionName} for new content
 Playlists: Playlists
 User Playlists:
   Your Playlists: Your Playlists

@@ -4,7 +4,7 @@
   >
     <FtListLazyWrapper
       v-for="(result, index) in data"
-      :key="`${dataType || result.type}-${result.videoId || result.playlistId || result.postId || result.id || result._id || result.authorId || result.title}-${result.playlistItemId || index}-${result.lastUpdatedAt || 0}`"
+      :key="itemKeys[index]"
       appearance="result"
       :data="result"
       :data-type="dataType || result.type"
@@ -129,6 +129,24 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+})
+
+/**
+ * Keys that follow an item, not its position, so a list that gains items at the top
+ * (a refreshed subscription feed) moves the existing cards instead of rebuilding them.
+ * Repeats of the same item (a collaboration in two subscribed channels' feeds) are told
+ * apart by how many times they have appeared so far.
+ */
+const itemKeys = computed(() => {
+  const seen = new Map()
+
+  return props.data.map((result) => {
+    const base = `${props.dataType || result.type}-${result.videoId || result.playlistId || result.postId || result.id || result._id || result.authorId || result.title}`
+    const occurrence = seen.get(base) ?? 0
+    seen.set(base, occurrence + 1)
+
+    return `${base}-${result.playlistItemId || occurrence}-${result.lastUpdatedAt || 0}`
+  })
 })
 
 const emit = defineEmits([

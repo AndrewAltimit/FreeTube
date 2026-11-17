@@ -301,7 +301,7 @@
 
 <script setup>
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
@@ -1316,6 +1316,16 @@ function onDragStart(event) {
 }
 
 parseVideoData()
+
+// A refreshed feed hands a kept card the video's new data, e.g. a stream that has ended
+watch(() => props.data, () => {
+  // parseVideoData only ever sets these, so start from their initial values
+  hideViews.value = false
+  parsedViewCount.value = ''
+  uploadedTime.value = ''
+  published.value = undefined
+  parseVideoData()
+})
 
 showDeArrowTitle.value = useDeArrowTitles.value
 showDeArrowThumbnail.value = useDeArrowThumbnails.value
