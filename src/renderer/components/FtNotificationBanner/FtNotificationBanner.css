@@ -34,6 +34,25 @@
   padding: 0.4em;
 }
 
+.actionButton {
+  background-color: var(--text-with-main-color);
+  border-style: none;
+  border-radius: 4px;
+  color: var(--primary-color);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.9em;
+  font-weight: bold;
+  margin-inline: 8px 4px;
+  padding-block: 0.35em;
+  padding-inline: 0.9em;
+}
+
+.actionButton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .closeIcon {
   inline-size: 1em;
 }

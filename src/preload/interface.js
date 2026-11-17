@@ -323,5 +323,29 @@ export default {
     ipcRenderer.on(IpcChannels.SYNC_SUBSCRIPTION_CACHE, (_, { event, data }) => {
       handler(event, data)
     })
+  },
+
+  /**
+   * How this copy was installed, or null when the in-app updater can't update it
+   * @returns {Promise<'nsis' | 'dmg' | 'appimage' | 'deb' | 'rpm' | null>}
+   */
+  getUpdateInstallKind: () => {
+    return ipcRenderer.invoke(IpcChannels.GET_UPDATE_INSTALL_KIND)
+  },
+
+  /**
+   * Downloads, verifies and installs a release. `installing` means the app is about to restart.
+   * @param {string} version
+   * @param {(fraction: number) => void} onProgress
+   * @returns {Promise<{ status: 'installing' | 'opened' | 'unsupported' | 'busy' }>}
+   */
+  installUpdate: async (version, onProgress) => {
+    const listener = (_, fraction) => onProgress(fraction)
+    ipcRenderer.on(IpcChannels.INSTALL_UPDATE_PROGRESS, listener)
+    try {
+      return await ipcRenderer.invoke(IpcChannels.INSTALL_UPDATE, version)
+    } finally {
+      ipcRenderer.removeListener(IpcChannels.INSTALL_UPDATE_PROGRESS, listener)
+    }
   }
 }

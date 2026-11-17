@@ -34,6 +34,14 @@ Close Banner: Close Banner
 Version {versionNumber} is now available!  Click for more details: Version {versionNumber} is now available!  Click
   for more details
 Download From Site: Download From Site
+Install Update: Install Update
+'Downloading version {versionNumber}: {percent}%': 'Downloading version {versionNumber}: {percent}%'
+Installing version {versionNumber}. FreeTube will restart when it is done: Installing version {versionNumber}.
+  FreeTube will restart when it is done
+Drag FreeTube into Applications in the window that opened to finish updating: Drag FreeTube into Applications
+  in the window that opened to finish updating
+The update could not be installed. Download it from the releases page instead: The update could not be installed.
+  Download it from the releases page instead
 Are you sure you want to open this link?: Are you sure you want to open this link?
 
 # Global

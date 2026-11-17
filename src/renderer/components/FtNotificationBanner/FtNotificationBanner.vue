@@ -15,6 +15,15 @@
       {{ message }}
     </p>
     <button
+      v-if="actionLabel"
+      class="actionButton"
+      :disabled="actionDisabled"
+      @click.stop="emit('action')"
+      @keydown.enter.space.stop
+    >
+      {{ actionLabel }}
+    </button>
+    <button
       class="closeButton"
       :aria-label="$t('Close Banner')"
       :title="$t('Close Banner')"
@@ -37,10 +46,19 @@ defineProps({
   message: {
     type: String,
     required: true
+  },
+  /** Shows a button beside the message that emits `action` */
+  actionLabel: {
+    type: String,
+    default: ''
+  },
+  actionDisabled: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['click'])
+const emit = defineEmits(['click', 'action'])
 
 const id = useId()
 

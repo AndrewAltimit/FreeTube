@@ -49,7 +49,11 @@ const IpcChannels = {
   WRITE_TO_DEFAULT_FOLDER: 'write-to-default-folder',
 
   OPEN_IN_EXTERNAL_PLAYER: 'open-in-external-player',
-  OPEN_IN_EXTERNAL_PLAYER_RESULT: 'open-in-external-player-result'
+  OPEN_IN_EXTERNAL_PLAYER_RESULT: 'open-in-external-player-result',
+
+  GET_UPDATE_INSTALL_KIND: 'get-update-install-kind',
+  INSTALL_UPDATE: 'install-update',
+  INSTALL_UPDATE_PROGRESS: 'install-update-progress'
 }
 
 const DBActions = {
