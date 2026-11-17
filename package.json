@@ -23,6 +23,7 @@
     "clean": "node _scripts/clean.mjs",
     "debug": "node _scripts/dev-runner.js --remote-debug",
     "e2e:sabr": "node _scripts/e2e/sabr-seek.mjs",
+    "e2e:live": "node _scripts/e2e/live-probe.mjs",
     "dev": "node _scripts/dev-runner.js",
     "dev:web": "node _scripts/dev-runner.js --web",
     "get-instances": "node _scripts/getInstances.js",

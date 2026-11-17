@@ -13,6 +13,7 @@ vi.mock('../../../../src/renderer/helpers/sponsorblock.js', () => ({
 
 const { sponsorBlockSkipSegments } = await import('../../../../src/renderer/helpers/sponsorblock.js')
 const {
+  addLiveHlsHistory,
   buildRefreshedSabrData,
   deduplicateAudioTracks,
   findMostSimilarAudioBandwidth,
@@ -24,6 +25,7 @@ const {
   repairInvidiousManifest,
   registerSabrReload,
   requestFilter,
+  resolveLiveHlsHistoryUri,
   sortCaptions,
   translateSponsorBlockCategory,
 } = await import('../../../../src/renderer/helpers/player/utils.js')
@@ -411,5 +413,106 @@ describe('buildRefreshedSabrData', () => {
     expect(buildRefreshedSabrData(current, formats, { ...refreshed, streamingUrl: undefined })).toBeNull()
     expect(buildRefreshedSabrData(current, formats, { ...refreshed, ustreamerConfig: undefined })).toBeNull()
     expect(buildRefreshedSabrData(current, formats, { ...refreshed, poToken: undefined })).toBeNull()
+  })
+})
+
+describe('addLiveHlsHistory', () => {
+  const segment = (sq) => `https://rr2---sn-x.googlevideo.com/videoplayback/id/abc.1/itag/94/source/yt_live_broadcast/sq/${sq}/goap/lmt%3D1/dur/1.000/file/seg.ts`
+
+  const livePlaylist = (mediaSequence) => [
+    '#EXTM3U',
+    '#EXT-X-VERSION:3',
+    '#EXT-X-TARGETDURATION:1',
+    `#EXT-X-MEDIA-SEQUENCE:${mediaSequence}`,
+    '#EXT-X-PROGRAM-DATE-TIME:2026-11-17T19:25:33.797+00:00',
+    '#EXTINF:1.0,',
+    segment(mediaSequence),
+    '#EXTINF:1.0,',
+    segment(mediaSequence + 1),
+    '#EXTINF:1.0,',
+    segment(mediaSequence + 2),
+    ''
+  ].join('\n')
+
+  it('lists the earlier segments with placeholder URLs and a 30 second hold back', () => {
+    const result = addLiveHlsHistory(livePlaylist(5), null)
+    const lines = result.playlist.trim().split('\n')
+
+    expect(result.itag).toBe('94')
+    expect(result.segmentUrl).toBe(segment(7))
+    expect(lines).toContain('#EXT-X-MEDIA-SEQUENCE:0')
+    expect(lines).toContain('#EXT-X-SERVER-CONTROL:CAN-SKIP-UNTIL=43200,HOLD-BACK=30')
+    expect(lines.some(line => line.startsWith('#EXT-X-PROGRAM-DATE-TIME'))).toBe(false)
+
+    const uris = lines.filter(line => !line.startsWith('#'))
+    expect(uris).toEqual([
+      'https://ft-live-history.invalid/itag/94/sq/0/file/seg.ts',
+      'https://ft-live-history.invalid/itag/94/sq/1/file/seg.ts',
+      'https://ft-live-history.invalid/itag/94/sq/2/file/seg.ts',
+      'https://ft-live-history.invalid/itag/94/sq/3/file/seg.ts',
+      'https://ft-live-history.invalid/itag/94/sq/4/file/seg.ts',
+      segment(5),
+      segment(6),
+      segment(7)
+    ])
+    expect(lines.filter(line => line.startsWith('#EXTINF:'))).toHaveLength(8)
+    expect(result.nextSequence).toBe(8)
+  })
+
+  it('skips the segments already listed on a delta update, keeping the same media sequence', () => {
+    const result = addLiveHlsHistory(livePlaylist(6), 8)
+    const lines = result.playlist.trim().split('\n')
+
+    expect(lines).toContain('#EXT-X-MEDIA-SEQUENCE:0')
+    expect(lines).toContain('#EXT-X-SKIP:SKIPPED-SEGMENTS=6')
+    expect(lines.filter(line => !line.startsWith('#'))).toEqual([segment(6), segment(7), segment(8)])
+    expect(result.nextSequence).toBe(9)
+  })
+
+  it('lists segments that left the playlist between refreshes instead of skipping them', () => {
+    // the last response listed up to sq 7, then refreshes failed until sq 20 was the oldest one listed
+    const lines = addLiveHlsHistory(livePlaylist(20), 8).playlist.trim().split('\n')
+
+    // starts from sq 7, the newest segment shaka-player already has, so it can place the rest after it
+    expect(lines).toContain('#EXT-X-SKIP:SKIPPED-SEGMENTS=7')
+    const uris = lines.filter(line => !line.startsWith('#'))
+    expect(uris).toHaveLength(16)
+    expect(uris[0]).toBe('https://ft-live-history.invalid/itag/94/sq/7/file/seg.ts')
+    expect(uris[12]).toBe('https://ft-live-history.invalid/itag/94/sq/19/file/seg.ts')
+    expect(uris[13]).toBe(segment(20))
+  })
+
+  it('caps the history at the maximum duration', () => {
+    const lines = addLiveHlsHistory(livePlaylist(100), null, 10).playlist.trim().split('\n')
+
+    expect(lines).toContain('#EXT-X-MEDIA-SEQUENCE:90')
+    expect(lines.filter(line => !line.startsWith('#'))).toHaveLength(13)
+  })
+
+  it('keeps the audio file extension in the placeholder URLs', () => {
+    const playlist = livePlaylist(1).replaceAll('/itag/94/', '/itag/233/').replaceAll('/file/seg.ts', '/file/seg.aac')
+
+    expect(addLiveHlsHistory(playlist, null).playlist).toContain('https://ft-live-history.invalid/itag/233/sq/0/file/seg.aac')
+  })
+
+  it('leaves finished and unrecognised playlists alone', () => {
+    expect(addLiveHlsHistory(livePlaylist(5) + '#EXT-X-ENDLIST\n', null)).toBeNull()
+    expect(addLiveHlsHistory(livePlaylist(5).replace('/sq/5/', '/sq/9/'), null)).toBeNull()
+    expect(addLiveHlsHistory(livePlaylist(5).replace('#EXT-X-MEDIA-SEQUENCE:5\n', ''), null)).toBeNull()
+  })
+})
+
+describe('resolveLiveHlsHistoryUri', () => {
+  const latest = 'https://rr2---sn-x.googlevideo.com/videoplayback/id/abc.1/itag/94/sq/5078/dur/1.000/file/seg.ts'
+  const urls = new Map([['94', latest]])
+
+  it('builds the real segment URL from the newest one for the same itag', () => {
+    expect(resolveLiveHlsHistoryUri('https://ft-live-history.invalid/itag/94/sq/12/file/seg.ts', urls))
+      .toBe('https://rr2---sn-x.googlevideo.com/videoplayback/id/abc.1/itag/94/sq/12/dur/1.000/file/seg.ts')
+  })
+
+  it('ignores real URLs and itags it has no URL for', () => {
+    expect(resolveLiveHlsHistoryUri(latest, urls)).toBeNull()
+    expect(resolveLiveHlsHistoryUri('https://ft-live-history.invalid/itag/95/sq/12/file/seg.ts', urls)).toBeNull()
   })
 })

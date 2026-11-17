@@ -115,6 +115,7 @@ export default defineComponent({
       isLiveContent: false,
       isUpcoming: false,
       isPostLiveDvr: false,
+      isLiveDvrEnabled: false,
       isUnlisted: false,
       upcomingTimestamp: null,
       upcomingTimeLeft: null,
@@ -298,6 +299,10 @@ export default defineComponent({
         !this.isHiddenVideo(this.forbiddenTitles, this.channelsHiddenIdSet, video)
       )
     },
+    liveHlsDvrEnabled: function () {
+      return this.isLive && this.isLiveDvrEnabled && this.manifestMimeType === MANIFEST_TYPE_HLS
+    },
+
     startTimeSeconds: function () {
       if (this.isLoading || this.isLive) {
         return null
@@ -397,6 +402,7 @@ export default defineComponent({
       this.isLiveContent = false
       this.isUpcoming = false
       this.isPostLiveDvr = false
+      this.isLiveDvrEnabled = false
       this.isUnlisted = false
       this.upcomingTimestamp = null
       this.upcomingTimeLeft = null
@@ -615,6 +621,7 @@ export default defineComponent({
         this.isUpcoming = !!result.basic_info.is_upcoming
         this.isLiveContent = !!result.basic_info.is_live_content
         this.isPostLiveDvr = !!result.basic_info.is_post_live_dvr
+        this.isLiveDvrEnabled = !!result.basic_info.is_live_dvr_enabled
         this.isUnlisted = !!result.basic_info.is_unlisted
 
         const subCount = !result.secondary_info.owner.subscriber_count.isEmpty() ? parseLocalSubscriberCount(result.secondary_info.owner.subscriber_count.text) : NaN

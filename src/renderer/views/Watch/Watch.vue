@@ -21,6 +21,7 @@
           ref="player"
           :manifest-src="manifestSrc"
           :manifest-mime-type="manifestMimeType"
+          :live-dvr-enabled="liveHlsDvrEnabled"
           :sabr-data="sabrData"
           :sabr-refresh="refreshSabrData"
           :legacy-formats="legacyFormats"
