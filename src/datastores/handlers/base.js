@@ -77,7 +77,9 @@ class Settings {
           'proxyPort',
           'backendFallback',
           'backendPreference',
-          'hideToTrayOnMinimize'
+          'hideToTrayOnMinimize',
+          'checkForUpdates',
+          'installUpdatesOnStartup'
         ]
       }
     })

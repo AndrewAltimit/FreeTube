@@ -5,8 +5,12 @@ import {
   isValidUpdateVersion,
   parseSha256Sums,
   selectChecksumsAsset,
+  selectStartupUpdateVersion,
   selectUpdateAsset,
+  STARTUP_INSTALL_KINDS,
 } from '../../../src/main/updateAssets.js'
+import { isNewerVersion } from '../../../src/renderer/helpers/updates.js'
+import { buildSplashPage } from '../../../src/main/splashPage.js'
 
 const download = (name, version = '1.2.0') => ({
   name,
@@ -87,5 +91,47 @@ describe('parseSha256Sums', () => {
     expect(sums.get('freetube-1.2.0-linux-x64.deb')).toBe(hashA)
     expect(sums.get('freetube-1.2.0-win-x64-setup.exe')).toBe('b'.repeat(64))
     expect(sums.size).toBe(2)
+  })
+})
+
+describe('selectStartupUpdateVersion', () => {
+  const release = (tag, extra = {}) => [{ tag_name: tag, draft: false, ...extra }]
+
+  it('returns a newer release without the v', () => {
+    expect(selectStartupUpdateVersion(release('v1.3.0'), '1.2.0', isNewerVersion)).toBe('1.3.0')
+  })
+
+  it('ignores the same or an older release', () => {
+    expect(selectStartupUpdateVersion(release('v1.2.0'), '1.2.0', isNewerVersion)).toBeNull()
+    expect(selectStartupUpdateVersion(release('v1.1.0'), '1.2.0', isNewerVersion)).toBeNull()
+  })
+
+  it('ignores drafts, odd tags and anything that is not a release list', () => {
+    expect(selectStartupUpdateVersion(release('v1.3.0', { draft: true }), '1.2.0', isNewerVersion)).toBeNull()
+    expect(selectStartupUpdateVersion(release('v1.3.0/../x'), '1.2.0', isNewerVersion)).toBeNull()
+    expect(selectStartupUpdateVersion(release(13), '1.2.0', isNewerVersion)).toBeNull()
+    expect(selectStartupUpdateVersion([], '1.2.0', isNewerVersion)).toBeNull()
+    expect(selectStartupUpdateVersion({ message: 'API rate limit exceeded' }, '1.2.0', isNewerVersion)).toBeNull()
+  })
+})
+
+describe('STARTUP_INSTALL_KINDS', () => {
+  it('only covers installs that update without asking', () => {
+    expect([...STARTUP_INSTALL_KINDS].sort()).toEqual(['appimage', 'nsis'])
+  })
+})
+
+describe('buildSplashPage', () => {
+  it('embeds a PNG data URL logo and the status hook', () => {
+    const html = buildSplashPage({ dark: true, logoDataUrl: 'data:image/png;base64,iVBORw0KGgo=' })
+    expect(html).toContain('<img class="logo" src="data:image/png;base64,iVBORw0KGgo="')
+    expect(html).toContain('window.setUpdateStatus')
+    expect(html).toContain('#212121')
+  })
+
+  it('drops a logo that is not a PNG data URL', () => {
+    const html = buildSplashPage({ dark: false, logoDataUrl: 'javascript:alert(1)"><script>' })
+    expect(html).not.toContain('<img')
+    expect(html).toContain('#f1f1f1')
   })
 })

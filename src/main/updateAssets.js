@@ -92,3 +92,31 @@ export function parseSha256Sums(text) {
 
   return sums
 }
+
+/**
+ * The installs the startup updater installs without asking: the ones whose install step is silent and restarts
+ * FreeTube by itself. The others (a disk image to drag, a password prompt) keep the update banner.
+ * @type {ReadonlySet<InstallKind>}
+ */
+export const STARTUP_INSTALL_KINDS = new Set(['nsis', 'appimage'])
+
+/**
+ * Decides whether the startup updater installs a release before opening the main window.
+ * @param {unknown} releases the JSON of `GET /repos/{owner}/{repo}/releases?per_page=1`
+ * @param {string} currentVersion this build's version
+ * @param {(currentVersion: string, releaseVersion: string) => boolean} isNewerVersion
+ * @returns {string | null} the version to install, without the `v`, or null to start normally
+ */
+export function selectStartupUpdateVersion(releases, currentVersion, isNewerVersion) {
+  const release = Array.isArray(releases) ? releases[0] : undefined
+  if (!release || release.draft || typeof release.tag_name !== 'string') {
+    return null
+  }
+
+  const version = release.tag_name.replace(/^v/, '')
+  if (!isValidUpdateVersion(version) || !isNewerVersion(currentVersion, version)) {
+    return null
+  }
+
+  return version
+}

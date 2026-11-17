@@ -23,6 +23,9 @@ const {
   manifestPreprocessorTXml,
   patchLiveHlsMainManifest,
   repairInvidiousManifest,
+  buildTimestampedYouTubeUrl,
+  getSeekBarTimeAtPosition,
+  registerForbiddenRetry,
   registerSabrReload,
   requestFilter,
   resolveLiveHlsHistoryUri,
@@ -350,6 +353,63 @@ describe('logShakaError', () => {
     expect(message).toContain(`Category: MEDIA (${Category.MEDIA})`)
     expect(message).toContain(`Code: MP4_SIDX_WRONG_BOX_TYPE (${Code.MP4_SIDX_WRONG_BOX_TYPE})`)
     expect(rest).toEqual(['\n\nshaka-player Data:', '["extra"]', '\n\nFreeTube data:', '{"a":1}'])
+  })
+})
+
+describe('registerForbiddenRetry', () => {
+  it('backs off over three retries of a video, then refuses', () => {
+    let result = registerForbiddenRetry(null, 'abc', 0)
+    expect(result).toMatchObject({ allowed: true, delayMs: 2_000 })
+    result = registerForbiddenRetry(result.state, 'abc', 30_000)
+    expect(result).toMatchObject({ allowed: true, delayMs: 6_000 })
+    result = registerForbiddenRetry(result.state, 'abc', 60_000)
+    expect(result).toMatchObject({ allowed: true, delayMs: 20_000 })
+    result = registerForbiddenRetry(result.state, 'abc', 90_000)
+    expect(result.allowed).toBe(false)
+    // The refused attempt doesn't extend the window
+    expect(result.state.lastRetryAt).toBe(60_000)
+  })
+
+  it('starts over for another video or after ten quiet minutes', () => {
+    let result = registerForbiddenRetry(null, 'abc', 0)
+    result = registerForbiddenRetry(result.state, 'abc', 1)
+    result = registerForbiddenRetry(result.state, 'abc', 2)
+    expect(registerForbiddenRetry(result.state, 'abc', 3).allowed).toBe(false)
+
+    expect(registerForbiddenRetry(result.state, 'xyz', 3)).toMatchObject({ allowed: true, delayMs: 2_000 })
+    expect(registerForbiddenRetry(result.state, 'abc', 2 + 10 * 60_000 + 1)).toMatchObject({ allowed: true, delayMs: 2_000 })
+  })
+})
+
+describe('getSeekBarTimeAtPosition', () => {
+  const rect = { left: 100, width: 400 }
+
+  it('maps the pointer linearly onto the bar range', () => {
+    expect(getSeekBarTimeAtPosition(100, rect, 0, 600)).toBe(0)
+    expect(getSeekBarTimeAtPosition(300, rect, 0, 600)).toBe(300)
+    expect(getSeekBarTimeAtPosition(500, rect, 0, 600)).toBe(600)
+    expect(getSeekBarTimeAtPosition(200, rect, 100, 500)).toBe(200)
+  })
+
+  it('clamps positions outside the bar', () => {
+    expect(getSeekBarTimeAtPosition(0, rect, 0, 600)).toBe(0)
+    expect(getSeekBarTimeAtPosition(900, rect, 0, 600)).toBe(600)
+  })
+
+  it('falls back to the start for an unusable bar', () => {
+    expect(getSeekBarTimeAtPosition(300, { left: 0, width: 0 }, 0, 600)).toBe(0)
+    expect(getSeekBarTimeAtPosition(300, rect, 0, Number.NaN)).toBe(0)
+  })
+})
+
+describe('buildTimestampedYouTubeUrl', () => {
+  it('adds whole seconds as t', () => {
+    expect(buildTimestampedYouTubeUrl('dQw4w9WgXcQ', 83.9)).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=83')
+  })
+
+  it('leaves t out at the start', () => {
+    expect(buildTimestampedYouTubeUrl('dQw4w9WgXcQ', 0.4)).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    expect(buildTimestampedYouTubeUrl('dQw4w9WgXcQ', -5)).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
   })
 })
 

@@ -93,10 +93,11 @@ function getTargetArch() {
 /**
  * @param {string} version
  * @param {(fraction: number) => void} onProgress
+ * @param {AbortSignal} [signal] cancels the download; once it has finished, the install goes ahead regardless
  * @returns {Promise<{ status: 'installing' | 'opened' | 'unsupported' | 'busy' }>}
  * `installing` means the app is about to quit and the new version start
  */
-export async function installUpdate(version, onProgress) {
+export async function installUpdate(version, onProgress, signal) {
   if (!isValidUpdateVersion(version)) {
     throw new Error(`Not a version: ${version}`)
   }
@@ -113,7 +114,8 @@ export async function installUpdate(version, onProgress) {
   installInProgress = true
   try {
     const releaseResponse = await net.fetch(getReleaseApiUrl(version), {
-      headers: { Accept: 'application/vnd.github+json' }
+      headers: { Accept: 'application/vnd.github+json' },
+      signal
     })
     if (!releaseResponse.ok) {
       throw new Error(`Release lookup failed: HTTP ${releaseResponse.status}`)
@@ -126,7 +128,7 @@ export async function installUpdate(version, onProgress) {
       return { status: 'unsupported' }
     }
 
-    const checksumsResponse = await net.fetch(checksumsUrl)
+    const checksumsResponse = await net.fetch(checksumsUrl, { signal })
     if (!checksumsResponse.ok) {
       throw new Error(`Checksum download failed: HTTP ${checksumsResponse.status}`)
     }
@@ -140,11 +142,12 @@ export async function installUpdate(version, onProgress) {
     await asyncFs.mkdir(downloadDirectory, { recursive: true })
     const filePath = path.join(downloadDirectory, asset.name)
 
-    const actualHash = await download(asset.url, filePath, onProgress)
+    const actualHash = await download(asset.url, filePath, onProgress, signal)
     if (actualHash !== expectedHash) {
       await asyncFs.rm(filePath, { force: true })
       throw new Error(`${asset.name} does not match its SHA256SUMS entry`)
     }
+    signal?.throwIfAborted()
 
     return await install(kind, filePath)
   } finally {
@@ -157,10 +160,11 @@ export async function installUpdate(version, onProgress) {
  * @param {string} url
  * @param {string} filePath
  * @param {(fraction: number) => void} onProgress
+ * @param {AbortSignal} [signal]
  * @returns {Promise<string>} the SHA-256 of the file as lowercase hex
  */
-async function download(url, filePath, onProgress) {
-  const response = await net.fetch(url)
+async function download(url, filePath, onProgress, signal) {
+  const response = await net.fetch(url, { signal })
   if (!response.ok || !response.body) {
     throw new Error(`Download failed: HTTP ${response.status}`)
   }

@@ -290,6 +290,11 @@ Settings:
   General Settings:
     General Settings: General
     Check for Updates: Check for Updates
+    Install Updates on Startup:
+      Label: Install Updates on Startup
+      Tooltip: When a new version is out, download and install it before the main window
+        opens, showing its progress in a small window. Only for the Windows installer and
+        the AppImage; other installs keep the update banner.
     Fallback to Non-Preferred Backend on Failure: Fallback to Non-Preferred Backend
       on Failure
     Enable Search Suggestions: Enable Search Suggestions
@@ -960,6 +965,8 @@ Video:
       looping playlists: looping playlists
   Player:
     Reloading player at YouTube request: Reloading player at YouTube's request
+    Copy Video URL at Time: Copy Video URL at {time}
+    Retrying after HTTP 403: YouTube refused to send the video (HTTP 403). Retrying in {seconds} s…
     SABR reload limit reached: YouTube refused to verify playback of this video past this point. Try again later; reloading more often can get your IP address blocked.
     TranslatedCaptionTemplate: '{language} (translated from "{originalLanguage}")'
     Audio Tracks: Audio Tracks
