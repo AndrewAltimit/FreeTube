@@ -56,17 +56,17 @@ Both can be changed under Settings > Theme.
 <hr>
 
 ## Screenshots
-| The main FreeTube window                                                                         |
-|--------------------------------------------------------------------------------------------------|
-| ![](https://raw.githubusercontent.com/FreeTubeApp/FreeTubeApp.io/master/src/images/FreeTube1.png)|
+| The subscriptions feed |
+|---|
+| ![The subscriptions feed](.github/screenshots/subscriptions.png) |
 
-| Watching a video                                                                                 |
-|--------------------------------------------------------------------------------------------------|
-| ![](https://raw.githubusercontent.com/FreeTubeApp/FreeTubeApp.io/master/src/images/FreeTube2.png)|
+| Watching a video |
+|---|
+| ![Watching a video](.github/screenshots/watch.png) |
 
-| Settings                                                                                         |
-|--------------------------------------------------------------------------------------------------|
-| ![](https://raw.githubusercontent.com/FreeTubeApp/FreeTubeApp.io/master/src/images/FreeTube3.png)|
+| Settings |
+|---|
+| ![Settings](.github/screenshots/settings.png) |
 
 ## How does it work?
 FreeTube uses a built in extractor to grab and serve data / videos. The [Invidious API](https://github.com/iv-org/invidious) can also optionally be used. FreeTube does not use any official APIs to obtain data. While YouTube can still see your video requests, it can no
