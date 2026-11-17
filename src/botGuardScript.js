@@ -2,6 +2,8 @@ import { BotGuardClient } from 'bgutils-js/botguard'
 import { buildURL, GOOG_API_KEY } from 'bgutils-js/utils'
 import { WebPoMinter } from 'bgutils-js/webpo'
 
+import { requestUsableIntegrityToken } from './botGuardIntegrityToken.js'
+
 // This script has it's own webpack config, as it gets passed as a string to Electron's evaluateJavaScript function
 // in src/main/poTokenGenerator.js
 
@@ -80,26 +82,32 @@ export default async function (videoId, context, initialAttestationData, ytConfi
   // Like YouTube's web player (kevlar_base's WebPO minter), the snapshot for the integrity token takes an empty object
   // as the content binding. Without it the integrity token is still issued, but SABR sessions using PO tokens minted
   // from it stay "attestation pending" (stream protection status 2): about a minute of media, then nothing.
-  const webPoSignalOutput = []
-  const botGuardResponse = await botGuard.snapshot({ contentBinding: {}, webPoSignalOutput }, 10_000)
+  // GenerateIT sometimes returns a degraded integrity token that SABR never accepts (see botGuardIntegrityToken.js),
+  // so ask again with a fresh snapshot when it does
+  const { integrityToken, context: webPoSignalOutput } = await requestUsableIntegrityToken(async () => {
+    const webPoSignalOutput = []
+    const botGuardResponse = await botGuard.snapshot({ contentBinding: {}, webPoSignalOutput }, 10_000)
 
-  const integrityTokenResponse = await fetch(buildURL('GenerateIT', true), {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json+protobuf',
-      'x-goog-api-key': GOOG_API_KEY,
-      'x-user-agent': 'grpc-web-javascript/0.1',
-    },
-    body: JSON.stringify([requestKey, botGuardResponse])
+    const integrityTokenResponse = await fetch(buildURL('GenerateIT', true), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json+protobuf',
+        'x-goog-api-key': GOOG_API_KEY,
+        'x-user-agent': 'grpc-web-javascript/0.1',
+      },
+      body: JSON.stringify([requestKey, botGuardResponse])
+    })
+
+    const response = await integrityTokenResponse.json()
+
+    if (typeof response[0] !== 'string') {
+      throw new Error('Could not get integrity token')
+    }
+
+    return { integrityToken: response[0], context: webPoSignalOutput }
   })
 
-  const response = await integrityTokenResponse.json()
-
-  if (typeof response[0] !== 'string') {
-    throw new Error('Could not get integrity token')
-  }
-
-  const integrityTokenBasedMinter = await WebPoMinter.create({ integrityToken: response[0] }, webPoSignalOutput)
+  const integrityTokenBasedMinter = await WebPoMinter.create({ integrityToken }, webPoSignalOutput)
 
   return await integrityTokenBasedMinter.mintAsWebsafeString(videoId)
 }

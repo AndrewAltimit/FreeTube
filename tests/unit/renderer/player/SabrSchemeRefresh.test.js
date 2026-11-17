@@ -4,6 +4,7 @@ import { concatenateChunks, u8ToBase64 } from 'googlevideo/utils'
 import { CompositeBuffer, UmpWriter } from 'googlevideo/ump'
 import {
   MediaHeader,
+  NextRequestPolicy,
   ReloadPlaybackContext,
   StreamProtectionStatus,
   UMPPartId,
@@ -43,11 +44,14 @@ function rejectedPoTokenResponse() {
   ]])
 }
 
-function initSegmentResponse() {
+function initSegmentResponse(protectionStatus, formatId = { itag: 137, lastModified: '1', xtags: 'x' }) {
   return umpResponse([
+    ...(protectionStatus
+      ? [[UMPPartId.STREAM_PROTECTION_STATUS, StreamProtectionStatus.encode({ status: protectionStatus }).finish()]]
+      : []),
     [UMPPartId.MEDIA_HEADER, MediaHeader.encode({
       headerId: MEDIA_HEADER_ID,
-      formatId: { itag: 137, lastModified: '1', xtags: 'x' },
+      formatId,
       isInitSeg: true,
     }).finish()],
     [UMPPartId.MEDIA, new Uint8Array([MEDIA_HEADER_ID, ...MEDIA_BYTES])],
@@ -97,7 +101,16 @@ function setup(refreshStreamingData) {
     {},
   ).promise
 
-  return { requestInitSegment, reloads }
+  const requestAudioInitSegment = () => plugin(
+    'sabr:audio',
+    { uris: [`sabr:audio?formatId=${AUDIO_FORMAT}&init`], retryParameters: { timeout: 0 } },
+    shaka.net.NetworkingEngine.RequestType.SEGMENT,
+    () => {},
+    () => {},
+    {},
+  ).promise
+
+  return { requestInitSegment, requestAudioInitSegment, reloads }
 }
 
 afterEach(() => {
@@ -121,7 +134,7 @@ describe('SABR reload requests', () => {
 
     const response = await requestInitSegment()
 
-    expect(refresh).toHaveBeenCalledExactlyOnceWith('reload-token')
+    expect(refresh).toHaveBeenCalledExactlyOnceWith('reload-token', undefined)
     expect(reloads).not.toHaveBeenCalled()
     expect(response.data).toEqual(MEDIA_BYTES)
 
@@ -144,7 +157,7 @@ describe('SABR reload requests', () => {
     const { requestInitSegment, reloads } = setup(refresh)
 
     await expect(requestInitSegment()).resolves.toMatchObject({ data: MEDIA_BYTES })
-    expect(refresh).toHaveBeenCalledExactlyOnceWith(undefined)
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(undefined, undefined)
     expect(reloads).not.toHaveBeenCalled()
   })
 
@@ -227,5 +240,62 @@ describe('refreshSabrStream', () => {
 
     await expect(refreshSabrStream(state, refresh, undefined)).resolves.toBe(false)
     expect(refresh).not.toHaveBeenCalled()
+  })
+})
+
+describe('stalls on "attestation pending" (stream protection status 2)', () => {
+  const refreshedData = {
+    url: 'https://new.example/sabr', poToken: encodeBase64([5]), ustreamerConfig: encodeBase64([6]), clientInfo,
+  }
+
+  /** A response without media: only the protection status and a next request policy */
+  function policyOnlyResponse(protectionStatus) {
+    return umpResponse([
+      ...(protectionStatus
+        ? [[UMPPartId.STREAM_PROTECTION_STATUS, StreamProtectionStatus.encode({ status: protectionStatus }).finish()]]
+        : []),
+      [UMPPartId.NEXT_REQUEST_POLICY, NextRequestPolicy.encode({ targetAudioReadaheadMs: 15000 }).finish()],
+    ])
+  }
+
+  it('refreshes the PO token after a few policy-only retries and carries on with the new one', async () => {
+    const fetchMock = vi.fn()
+    for (let i = 0; i < 5; i++) fetchMock.mockResolvedValueOnce(policyOnlyResponse(2))
+    fetchMock.mockResolvedValueOnce(initSegmentResponse(1))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const refresh = vi.fn().mockResolvedValue(refreshedData)
+    const { requestInitSegment, reloads } = setup(refresh)
+
+    await expect(requestInitSegment()).resolves.toMatchObject({ data: MEDIA_BYTES })
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(undefined, { attestationPending: true })
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+    const retryBody = VideoPlaybackAbrRequest.decode(fetchMock.mock.calls[5][1].body)
+    expect(retryBody.streamerContext.poToken).toEqual(new Uint8Array([5]))
+    expect(reloads).not.toHaveBeenCalled()
+  })
+
+  it('keeps the longer retry limit for policy-only responses that are not "attestation pending"', async () => {
+    const fetchMock = vi.fn()
+    for (let i = 0; i < 6; i++) fetchMock.mockResolvedValueOnce(policyOnlyResponse(1))
+    fetchMock.mockResolvedValueOnce(initSegmentResponse(1))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const refresh = vi.fn().mockResolvedValue(refreshedData)
+    const { requestInitSegment } = setup(refresh)
+
+    await expect(requestInitSegment()).resolves.toMatchObject({ data: MEDIA_BYTES })
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('reloads the player once three refreshed tokens have stalled too', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(policyOnlyResponse(2))))
+
+    const refresh = vi.fn().mockResolvedValue(refreshedData)
+    const { requestInitSegment, reloads } = setup(refresh)
+
+    await expect(requestInitSegment()).rejects.toMatchObject({ code: shaka.util.Error.Code.OPERATION_ABORTED })
+    expect(refresh).toHaveBeenCalledTimes(3)
+    expect(reloads).toHaveBeenCalledOnce()
   })
 })

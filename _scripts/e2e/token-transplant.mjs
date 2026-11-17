@@ -98,8 +98,9 @@ if (args.mode === 'freetube') {
       `;return ${exportMatch[1]}(${JSON.stringify(args.video)},${JSON.stringify(ytContext)},${JSON.stringify(initialAttestationData)},${JSON.stringify(ytConfig)},null)`)
     const targetPage = args.mintIn === 'watch' ? context.pages()[0] : mintPage
     const result = await targetPage.evaluate(`(async () => { ${script} })()`)
-    console.log(`${elapsed()}s  minted FreeTube token: ${result.poToken.length} chars`)
-    return base64ToU8(result.poToken)
+    const poToken = typeof result === 'string' ? result : result.poToken
+    console.log(`${elapsed()}s  minted FreeTube token: ${poToken.length} chars`)
+    return base64ToU8(poToken)
   })
   tokenPromise.catch(error => console.error('minting failed', error))
 }

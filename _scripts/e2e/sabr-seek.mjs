@@ -4,7 +4,7 @@
 //
 // Usage: pnpm run e2e:sabr [-- --video <id>] [--seek <seconds>] [--play <seconds>] [--watch <seconds>]
 //
-// Exit code 0 means playback continued past the seek target without a player reload.
+// Exit code 0 means playback kept going for most of the watch window after the seek, without a player reload.
 
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
@@ -92,7 +92,9 @@ const protectionStatuses = logs
 const reloads = logs.filter(log => /requesting reload/.test(log.text)).length
 const http403 = logs.filter(log => /HTTP 403/.test(log.text)).length
 const finalPosition = positions.at(-1)
-const passed = reloads === 0 && finalPosition > seekTo + 5
+// Playback has to keep pace for most of the watch window, not just get a few seconds past the seek target:
+// an "attestation pending" stall freezes the position about a minute in
+const passed = reloads === 0 && finalPosition > seekTo + watchSeconds * 0.75
 
 console.log('\n--- SABR log')
 for (const log of logs) {
