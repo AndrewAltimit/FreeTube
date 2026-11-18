@@ -1,6 +1,7 @@
 <template>
   <SubscriptionsTabUi
     :is-loading="isLoading"
+    :is-refreshing="isRefreshing"
     :video-list="videoList"
     :error-channels="errorChannels"
     :attempted-fetch="attemptedFetch"
@@ -30,6 +31,8 @@ import { invidiousFetch } from '../helpers/api/invidious'
 const { t } = useI18n()
 
 const isLoading = ref(true)
+/** A remote refresh running behind a feed that is already shown */
+const isRefreshing = ref(false)
 const videoList = shallowRef([])
 const errorChannels = ref([])
 const attemptedFetch = ref(false)
@@ -37,6 +40,8 @@ const attemptedFetch = ref(false)
 const lastRemoteRefreshSuccessTimestamp = ref(null)
 
 let alreadyLoadedRemotely = false
+/** Collected during a remote load and shown once it finishes, so the error list does not flicker */
+let pendingErrorChannels = []
 
 /** @type {import('vue').ComputedRef<'local' | 'invidious'>} */
 const backendPreference = computed(() => store.getters.getBackendPreference)
@@ -178,12 +183,18 @@ async function loadVideosForSubscriptionsFromRemote() {
 
   const channelsToLoadFromRemote = activeSubscriptionList.value
   let channelCount = 0
-  isLoading.value = true
+  // Refreshing a feed that is already on screen keeps it there: the new results
+  // replace it in one step and the keyed cards move instead of being redrawn
+  if (isLoading.value || videoList.value.length === 0) {
+    isLoading.value = true
+  } else {
+    isRefreshing.value = true
+  }
   store.commit('setShowProgressBar', true)
   store.commit('setProgressBarPercentage', 0)
   attemptedFetch.value = true
 
-  errorChannels.value = []
+  pendingErrorChannels = []
   const subscriptionUpdates = []
 
   const videoListFromRemote = (await Promise.all(channelsToLoadFromRemote.map(async (channel) => {
@@ -213,11 +224,14 @@ async function loadVideosForSubscriptionsFromRemote() {
       })
     }
 
-    return videos ?? []
+    // A channel that could not be fetched this time (e.g. a 403 on its feed) keeps its cached videos
+    return videos ?? store.getters.getShortsCache[channel.id]?.videos ?? []
   }))).flat()
 
+  errorChannels.value = pendingErrorChannels
   videoList.value = updateVideoListAfterProcessing(videoListFromRemote)
   isLoading.value = false
+  isRefreshing.value = false
   store.commit('setShowProgressBar', false)
   lastRemoteRefreshSuccessTimestamp.value = Date.now()
 
@@ -246,7 +260,7 @@ async function getChannelShortsLocal(channel, failedAttempts = 0) {
       })
 
       if (response2.status === 404) {
-        errorChannels.value.push(channel)
+        pendingErrorChannels.push(channel)
       }
 
       return {
@@ -296,7 +310,7 @@ async function getChannelShortsInvidious(channel, failedAttempts = 0) {
       })
 
       if (response2.status === 404) {
-        errorChannels.value.push(channel)
+        pendingErrorChannels.push(channel)
       }
 
       return { videos: [] }
